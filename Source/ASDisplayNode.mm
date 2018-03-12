@@ -468,6 +468,7 @@ static ASDisplayNodeMethodOverrides GetASDisplayNodeMethodOverrides(Class c)
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     ivarsCache = [[NSCache alloc] init];
+    ivarsCache.name = @"org.TextureGroup.Texture.MainThreadIvarsCache";
   });
 
   NSValue *result = [ivarsCache objectForKey:self];

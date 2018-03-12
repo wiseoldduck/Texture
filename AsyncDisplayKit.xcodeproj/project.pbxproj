@@ -378,6 +378,8 @@
 		CCA282CD1E9EB73E0037E8B7 /* ASTipNode.m in Sources */ = {isa = PBXBuildFile; fileRef = CCA282CB1E9EB73E0037E8B7 /* ASTipNode.m */; };
 		CCA282D01E9EBF6C0037E8B7 /* ASTipsWindow.h in Headers */ = {isa = PBXBuildFile; fileRef = CCA282CE1E9EBF6C0037E8B7 /* ASTipsWindow.h */; };
 		CCA282D11E9EBF6C0037E8B7 /* ASTipsWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = CCA282CF1E9EBF6C0037E8B7 /* ASTipsWindow.m */; };
+		CCA49B8F2057259A0047CF5A /* ASCache.h in Headers */ = {isa = PBXBuildFile; fileRef = CCA49B8D2057259A0047CF5A /* ASCache.h */; };
+		CCA49B902057259A0047CF5A /* ASCache.mm in Sources */ = {isa = PBXBuildFile; fileRef = CCA49B8E2057259A0047CF5A /* ASCache.mm */; };
 		CCA5F62E1EECC2A80060C137 /* ASAssert.m in Sources */ = {isa = PBXBuildFile; fileRef = CCA5F62D1EECC2A80060C137 /* ASAssert.m */; };
 		CCB1F95A1EFB60A5009C7475 /* ASLog.m in Sources */ = {isa = PBXBuildFile; fileRef = CCB1F9591EFB60A5009C7475 /* ASLog.m */; };
 		CCB1F95C1EFB6350009C7475 /* ASSignpost.h in Headers */ = {isa = PBXBuildFile; fileRef = CCB1F95B1EFB6316009C7475 /* ASSignpost.h */; };
@@ -874,6 +876,8 @@
 		CCA282CB1E9EB73E0037E8B7 /* ASTipNode.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ASTipNode.m; sourceTree = "<group>"; };
 		CCA282CE1E9EBF6C0037E8B7 /* ASTipsWindow.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ASTipsWindow.h; sourceTree = "<group>"; };
 		CCA282CF1E9EBF6C0037E8B7 /* ASTipsWindow.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ASTipsWindow.m; sourceTree = "<group>"; };
+		CCA49B8D2057259A0047CF5A /* ASCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ASCache.h; sourceTree = "<group>"; };
+		CCA49B8E2057259A0047CF5A /* ASCache.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ASCache.mm; sourceTree = "<group>"; };
 		CCA5F62D1EECC2A80060C137 /* ASAssert.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ASAssert.m; sourceTree = "<group>"; };
 		CCB1F9591EFB60A5009C7475 /* ASLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ASLog.m; sourceTree = "<group>"; };
 		CCB1F95B1EFB6316009C7475 /* ASSignpost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ASSignpost.h; sourceTree = "<group>"; };
@@ -1470,6 +1474,8 @@
 				1950C4481A3BB5C1005C8279 /* ASEqualityHelpers.h */,
 				0516FA3B1A15563400B4EBED /* ASLog.h */,
 				CCB1F9591EFB60A5009C7475 /* ASLog.m */,
+				CCA49B8D2057259A0047CF5A /* ASCache.h */,
+				CCA49B8E2057259A0047CF5A /* ASCache.mm */,
 				CCB1F95B1EFB6316009C7475 /* ASSignpost.h */,
 			);
 			path = Base;
@@ -1761,6 +1767,7 @@
 			files = (
 				1A6C000D1FAB4E2100D05926 /* ASCornerLayoutSpec.h in Headers */,
 				E54E00721F1D3828000B30D7 /* ASPagerNode+Beta.h in Headers */,
+				CCA49B8F2057259A0047CF5A /* ASCache.h in Headers */,
 				E5B225281F1790D6001E1431 /* ASHashing.h in Headers */,
 				CC034A131E649F1300626263 /* AsyncDisplayKit+IGListKitMethods.h in Headers */,
 				693A1DCA1ECC944E00D0C9D2 /* IGListAdapter+AsyncDisplayKit.h in Headers */,
@@ -2366,6 +2373,7 @@
 				CCA282B51E9EA7310037E8B7 /* ASTipsController.m in Sources */,
 				B35062271B010EFD0018CF92 /* ASRangeController.mm in Sources */,
 				0442850A1BAA63FE00D16268 /* ASBatchFetching.m in Sources */,
+				CCA49B902057259A0047CF5A /* ASCache.mm in Sources */,
 				68FC85E61CE29B9400EDD713 /* ASNavigationController.m in Sources */,
 				CC4C2A791D88E3BF0039ACAB /* ASTraceEvent.m in Sources */,
 				34EFC76F1B701CF700AD841F /* ASRatioLayoutSpec.mm in Sources */,

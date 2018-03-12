@@ -33,6 +33,7 @@ UIImage *cachedImageNamed(NSString *imageName, UITraitCollection *traitCollectio
     // all of these objects contain compressed image data and are relatively small
     // compared to the backing stores of text and image views.
     imageCache = [[NSCache alloc] init];
+    imageCache.name = @"org.TextureGroup.Texture.namedImageCache";
   });
 
   UIImage *image = nil;
@@ -113,6 +114,7 @@ UIImage *cachedImageNamed(NSString *imageName, UITraitCollection *traitCollectio
     __pathCache = [[NSCache alloc] init];
     // UIBezierPath objects are fairly small and these are equally sized. 20 should be plenty for many different parameters.
     __pathCache.countLimit = 20;
+    __pathCache.name = @"org.TextureGroup.Texture.imagePathCache";
   });
   
   // Treat clear background color as no background color

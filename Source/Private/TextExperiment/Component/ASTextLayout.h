@@ -53,13 +53,13 @@ extern const CGSize ASTextContainerMaxSize;
 @interface ASTextContainer : NSObject <NSCoding, NSCopying>
 
 /// Creates a container with the specified size. @param size The size.
-+ (instancetype)containerWithSize:(CGSize)size;
++ (instancetype)containerWithSize:(CGSize)size NS_RETURNS_RETAINED;
 
 /// Creates a container with the specified size and insets. @param size The size. @param insets The text insets.
-+ (instancetype)containerWithSize:(CGSize)size insets:(UIEdgeInsets)insets;
++ (instancetype)containerWithSize:(CGSize)size insets:(UIEdgeInsets)insets NS_RETURNS_RETAINED;
 
 /// Creates a container with the specified path. @param path The path.
-+ (instancetype)containerWithPath:(nullable UIBezierPath *)path;
++ (instancetype)containerWithPath:(nullable UIBezierPath *)path NS_RETURNS_RETAINED;
 
 /// The constrained size. (if the size is larger than ASTextContainerMaxSize, it will be clipped)
 @property CGSize size;
@@ -96,6 +96,10 @@ extern const CGSize ASTextContainerMaxSize;
 /// This modifier is applied to the lines before the layout is completed,
 /// give you a chance to modify the line position. Default is nil.
 @property (nullable, copy) id<ASTextLinePositionModifier> linePositionModifier;
+
+/// The hash of this container, optionally including the size in the hash.
+- (NSUInteger)hashIncludingSize:(BOOL)includeSize;
+
 @end
 
 
@@ -157,7 +161,7 @@ extern const CGSize ASTextContainerMaxSize;
  @param text The text (if nil, returns nil).
  @return A new layout, or nil when an error occurs.
  */
-+ (nullable ASTextLayout *)layoutWithContainerSize:(CGSize)size text:(NSAttributedString *)text;
++ (nullable ASTextLayout *)layoutWithContainerSize:(CGSize)size text:(NSAttributedString *)text NS_RETURNS_RETAINED;
 
 /**
  Generate a layout with the given container and text.
@@ -166,7 +170,7 @@ extern const CGSize ASTextContainerMaxSize;
  @param text      The text (if nil, returns nil).
  @return A new layout, or nil when an error occurs.
  */
-+ (nullable ASTextLayout *)layoutWithContainer:(ASTextContainer *)container text:(NSAttributedString *)text;
++ (nullable ASTextLayout *)layoutWithContainer:(ASTextContainer *)container text:(NSAttributedString *)text NS_RETURNS_RETAINED;
 
 /**
  Generate a layout with the given container and text.
@@ -177,7 +181,7 @@ extern const CGSize ASTextContainerMaxSize;
  length of the range is 0, it means the length is no limit.
  @return A new layout, or nil when an error occurs.
  */
-+ (nullable ASTextLayout *)layoutWithContainer:(ASTextContainer *)container text:(NSAttributedString *)text range:(NSRange)range;
++ (nullable ASTextLayout *)layoutWithContainer:(ASTextContainer *)container text:(NSAttributedString *)text range:(NSRange)range NS_RETURNS_RETAINED;
 
 /**
  Generate layouts with the given containers and text.
@@ -188,7 +192,7 @@ extern const CGSize ASTextContainerMaxSize;
  or nil when an error occurs.
  */
 + (nullable NSArray<ASTextLayout *> *)layoutWithContainers:(NSArray<ASTextContainer *> *)containers
-                                                      text:(NSAttributedString *)text;
+                                                      text:(NSAttributedString *)text NS_RETURNS_RETAINED;
 
 /**
  Generate layouts with the given containers and text.
@@ -202,7 +206,7 @@ extern const CGSize ASTextContainerMaxSize;
  */
 + (nullable NSArray<ASTextLayout *> *)layoutWithContainers:(NSArray<ASTextContainer *> *)containers
                                                       text:(NSAttributedString *)text
-                                                     range:(NSRange)range;
+                                                     range:(NSRange)range NS_RETURNS_RETAINED;
 
 - (instancetype)init UNAVAILABLE_ATTRIBUTE;
 + (instancetype)new UNAVAILABLE_ATTRIBUTE;
@@ -542,6 +546,12 @@ extern const CGSize ASTextContainerMaxSize;
 - (void)drawInContext:(nullable CGContextRef)context
                  size:(CGSize)size
                 debug:(nullable ASTextDebugOption *)debug;
+
+/**
+ * Whether this layout can be used for the given container-text pair.
+ */
+- (BOOL)isCompatibleWithContainer:(ASTextContainer *)container
+                             text:(NSAttributedString *)text;
 
 @end
 
