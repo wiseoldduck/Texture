@@ -34,7 +34,7 @@ using namespace std;
 - (instancetype)init
 {
   if (self = [super init]) {
-    // Opaque-Memory to avoid retain/releases. The key will be retained elsewhere.
+    // Custom callbacks to avoid retain/releases. The key will be retained elsewhere.
     CFBagCallBacks cb = kCFTypeBagCallBacks;
     cb.release = NULL;
     cb.retain = NULL;
