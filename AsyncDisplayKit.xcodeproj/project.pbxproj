@@ -410,7 +410,7 @@
 		CCCCCCDA1EC3EF060087FE10 /* ASTextLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCC81EC3EF060087FE10 /* ASTextLayout.m */; };
 		CCCCCCDB1EC3EF060087FE10 /* ASTextLine.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCC91EC3EF060087FE10 /* ASTextLine.h */; };
 		CCCCCCDC1EC3EF060087FE10 /* ASTextLine.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCCA1EC3EF060087FE10 /* ASTextLine.m */; };
-		CCCCCCDD1EC3EF060087FE10 /* ASTextAttribute.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCCC1EC3EF060087FE10 /* ASTextAttribute.h */; };
+		CCCCCCDD1EC3EF060087FE10 /* ASTextAttribute.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCCC1EC3EF060087FE10 /* ASTextAttribute.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CCCCCCDE1EC3EF060087FE10 /* ASTextAttribute.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCCD1EC3EF060087FE10 /* ASTextAttribute.m */; };
 		CCCCCCDF1EC3EF060087FE10 /* ASTextRunDelegate.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCCE1EC3EF060087FE10 /* ASTextRunDelegate.h */; };
 		CCCCCCE01EC3EF060087FE10 /* ASTextRunDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCCF1EC3EF060087FE10 /* ASTextRunDelegate.m */; };
@@ -418,7 +418,7 @@
 		CCCCCCE21EC3EF060087FE10 /* ASTextUtilities.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCD21EC3EF060087FE10 /* ASTextUtilities.m */; };
 		CCCCCCE31EC3EF060087FE10 /* NSParagraphStyle+ASText.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCD31EC3EF060087FE10 /* NSParagraphStyle+ASText.h */; };
 		CCCCCCE41EC3EF060087FE10 /* NSParagraphStyle+ASText.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCD41EC3EF060087FE10 /* NSParagraphStyle+ASText.m */; };
-		CCCCCCE71EC3F0FC0087FE10 /* NSAttributedString+ASText.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCE51EC3F0FC0087FE10 /* NSAttributedString+ASText.h */; };
+		CCCCCCE71EC3F0FC0087FE10 /* NSAttributedString+ASText.h in Headers */ = {isa = PBXBuildFile; fileRef = CCCCCCE51EC3F0FC0087FE10 /* NSAttributedString+ASText.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CCCCCCE81EC3F0FC0087FE10 /* NSAttributedString+ASText.m in Sources */ = {isa = PBXBuildFile; fileRef = CCCCCCE61EC3F0FC0087FE10 /* NSAttributedString+ASText.m */; };
 		CCDC9B4D200991D10063C1F8 /* ASGraphicsContext.h in Headers */ = {isa = PBXBuildFile; fileRef = CCDC9B4B200991D10063C1F8 /* ASGraphicsContext.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CCDC9B4E200991D10063C1F8 /* ASGraphicsContext.m in Sources */ = {isa = PBXBuildFile; fileRef = CCDC9B4C200991D10063C1F8 /* ASGraphicsContext.m */; };

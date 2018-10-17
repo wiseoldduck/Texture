@@ -130,3 +130,6 @@
 #import <AsyncDisplayKit/IGListAdapter+AsyncDisplayKit.h>
 #import <AsyncDisplayKit/AsyncDisplayKit+IGListKitMethods.h>
 #import <AsyncDisplayKit/ASLayout+IGListKit.h>
+
+#import <AsyncDisplayKit/ASTextAttribute.h>
+#import <AsyncDisplayKit/NSAttributedString+ASText.h>
