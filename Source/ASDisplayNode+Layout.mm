@@ -295,7 +295,7 @@ ASLayoutElementStyleExtensibilityForwarding
 
 - (void)_u_measureNodeWithBoundsIfNecessary:(CGRect)bounds
 {
-  ASAssertUnlocked(__instanceLock__);
+  // ASAssertUnlocked(__instanceLock__);
   
   ASDN::MutexLocker l(__instanceLock__);
   // Check if we are a subnode in a layout transition.
@@ -455,7 +455,7 @@ ASLayoutElementStyleExtensibilityForwarding
 - (void)_layoutSublayouts
 {
   ASDisplayNodeAssertThreadAffinity(self);
-  ASAssertUnlocked(__instanceLock__);
+  // ASAssertUnlocked(__instanceLock__);
   
   ASLayout *layout;
   {
