@@ -160,6 +160,13 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
    */
   ASCollectionNode *_keepalive_node;
 
+  // TODO: Migrate BOOL ivars into this.
+  struct {
+    unsigned int remeasuresBeforeLayoutPass:1;
+    unsigned int skipRemeasureWhenBoundsAreEmpty:1;
+    unsigned int allowAsyncUpdatesForInitialContent:1;
+  } _collectionViewFlags;
+
   struct {
     unsigned int scrollViewDidScroll:1;
     unsigned int scrollViewWillBeginDragging:1;
@@ -283,6 +290,7 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
     super.prefetchingEnabled = NO;
   }
 
+  _collectionViewFlags.remeasuresBeforeLayoutPass = YES;
   _layoutController = [[ASCollectionViewLayoutController alloc] initWithCollectionView:self];
   
   _rangeController = [[ASRangeController alloc] init];
@@ -666,6 +674,44 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
   return [_rangeController tuningParametersForRangeMode:rangeMode rangeType:rangeType];
 }
 
+- (void)setRemeasuresBeforeLayoutPassOnBoundsChange:(BOOL)remeasuresBeforeLayoutPass
+{
+  _collectionViewFlags.remeasuresBeforeLayoutPass = remeasuresBeforeLayoutPass;
+}
+
+- (BOOL)remeasuresBeforeLayoutPassOnBoundsChange
+{
+  return _collectionViewFlags.remeasuresBeforeLayoutPass;
+}
+
+- (void)setSkipRemeasureWhenBoundsAreEmpty:(BOOL)skip {
+  _collectionViewFlags.skipRemeasureWhenBoundsAreEmpty = skip;
+}
+
+- (BOOL)skipRemeasureWhenBoundsAreEmpty {
+  return _collectionViewFlags.skipRemeasureWhenBoundsAreEmpty;
+}
+
+- (void)setUpdateBatchSize:(NSUInteger)updateBatchSize
+{
+  _dataController.updateBatchSize = updateBatchSize;
+}
+
+- (NSUInteger)updateBatchSize
+{
+  return _dataController.updateBatchSize;
+}
+
+- (BOOL)allowAsyncUpdatesForInitialContent
+{
+  return _collectionViewFlags.allowAsyncUpdatesForInitialContent;
+}
+
+- (void)setAllowAsyncUpdatesForInitialContent:(BOOL)allowAsyncUpdatesForInitialContent
+{
+  _collectionViewFlags.allowAsyncUpdatesForInitialContent = allowAsyncUpdatesForInitialContent;
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-implementations"
 - (void)setZeroContentInsets:(BOOL)zeroContentInsets
@@ -702,7 +748,7 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
       return [self _sizeForUIKitCellWithKind:element.supplementaryElementKind atIndexPath:indexPath];
     }
   } else {
-    return [node layoutThatFits:element.constrainedSize].size;
+    return [node measure:element.constrainedSize];
   }
 }
 
@@ -885,6 +931,9 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
     updates();
   }
   [super reloadData];
+  if (ASActivateExperimentalFeature(ASExperimentalReloadDataFlagHandling)) {
+    _superIsPendingDataLoad = YES;
+  }
   if (completion) {
     completion(YES);
   }
@@ -973,8 +1022,10 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
 - (void)registerSupplementaryNodeOfKind:(NSString *)elementKind
 {
   ASDisplayNodeAssert(elementKind != nil, @"A kind is needed for supplementary node registration");
-  [_registeredSupplementaryKinds addObject:elementKind];
-  [self registerClass:[_ASCollectionReusableView class] forSupplementaryViewOfKind:elementKind withReuseIdentifier:kReuseIdentifier];
+  if (![_registeredSupplementaryKinds containsObject:elementKind]) {
+    [_registeredSupplementaryKinds addObject:elementKind];
+    [self registerClass:[_ASCollectionReusableView class] forSupplementaryViewOfKind:elementKind withReuseIdentifier:kReuseIdentifier];
+  }
 }
 
 - (void)insertSections:(NSIndexSet *)sections
@@ -1095,6 +1146,9 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
                                             sizeForItemAtIndexPath:(NSIndexPath *)indexPath
 {
   ASDisplayNodeAssertMainThread();
+  if (_collectionViewFlags.skipRemeasureWhenBoundsAreEmpty && CGRectIsEmpty(self.bounds)) {
+    return CGSizeZero;
+  }
   ASCollectionElement *e = [_dataController.visibleMap elementForItemAtIndexPath:indexPath];
   return e ? [self sizeForElement:e] : ASFlowLayoutDefault(layout, itemSize, CGSizeZero);
 }
@@ -1103,6 +1157,9 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
                        referenceSizeForHeaderInSection:(NSInteger)section
 {
   ASDisplayNodeAssertMainThread();
+  if (_collectionViewFlags.skipRemeasureWhenBoundsAreEmpty && CGRectIsEmpty(self.bounds)) {
+    return CGSizeZero;
+  }
   ASElementMap *map = _dataController.visibleMap;
   ASCollectionElement *e = [map supplementaryElementOfKind:UICollectionElementKindSectionHeader
                                                atIndexPath:[NSIndexPath indexPathForItem:0 inSection:section]];
@@ -1113,6 +1170,9 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
                        referenceSizeForFooterInSection:(NSInteger)section
 {
   ASDisplayNodeAssertMainThread();
+  if (_collectionViewFlags.skipRemeasureWhenBoundsAreEmpty && CGRectIsEmpty(self.bounds)) {
+    return CGSizeZero;
+  }
   ASElementMap *map = _dataController.visibleMap;
   ASCollectionElement *e = [map supplementaryElementOfKind:UICollectionElementKindSectionFooter
                                                atIndexPath:[NSIndexPath indexPathForItem:0 inSection:section]];
@@ -1794,7 +1854,13 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
     default:
       break;
   }
-  
+
+  // If bounds changed in non-scrolling direction and we didn't handle it during the bounds size change,
+  // handle it now before super calls through to [UICollectionViewLayout prepareLayout].
+  if (!_collectionViewFlags.remeasuresBeforeLayoutPass) {
+    [self remeasureNodesIfNeededForBoundsChange];
+  }
+
   // To ensure _maxSizeForNodesConstrainedSize is up-to-date for every usage, this call to super must be done last
   [super layoutSubviews];
     
@@ -1909,20 +1975,19 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
   if (ASCellLayoutModeIncludes(ASCellLayoutModeAlwaysAsync)) {
     return NO;
   }
-  // Reload data is expensive, don't block main while doing so.
-  if (changeSet.includesReloadData) {
-    return NO;
-  }
+  // The heuristics below apply to the ASCellLayoutModeNone.
   // If we have very few ASCellNodes (besides UIKit passthrough ones), match UIKit by blocking.
   if (changeSet.countForAsyncLayout < 2) {
     return YES;
   }
-  CGSize contentSize = self.contentSize;
-  CGSize boundsSize = self.bounds.size;
-  if (contentSize.height <= boundsSize.height && contentSize.width <= boundsSize.width) {
-    return YES;
+  if (!self.allowAsyncUpdatesForInitialContent) {
+    CGSize contentSize = self.contentSize;
+    CGSize boundsSize = self.bounds.size;
+    if (contentSize.height <= boundsSize.height && contentSize.width <= boundsSize.width) {
+      return YES;
+    }
   }
-  return NO; // ASCellLayoutModeNone
+  return NO;
 }
 
 - (BOOL)dataControllerShouldSerializeNodeCreation:(ASDataController *)dataController
@@ -2147,8 +2212,8 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
   if (_layoutInspectorFlags.constrainedSizeForSupplementaryNodeOfKindAtIndexPath) {
     return [self.layoutInspector collectionView:self constrainedSizeForSupplementaryNodeOfKind:kind atIndexPath:indexPath];
   }
-  
-  ASDisplayNodeAssert(NO, @"To support supplementary nodes in ASCollectionView, it must have a layoutInspector for layout inspection. (See ASCollectionViewFlowLayoutInspector for an example.)");
+  // TODO(maxwang): enable this for upstreaming.
+  // ASDisplayNodeAssert(NO, @"To support supplementary nodes in ASCollectionView, it must have a layoutInspector for layout inspection. (See ASCollectionViewFlowLayoutInspector for an example.)");
   return ASSizeRangeMake(CGSizeZero, CGSizeZero);
 }
 
@@ -2218,7 +2283,8 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
 
 - (BOOL)rangeControllerShouldUpdateRanges:(ASRangeController *)rangeController
 {
-  return !ASCellLayoutModeIncludes(ASCellLayoutModeDisableRangeController);
+  BOOL disableRangeController = ASCellLayoutModeIncludes(ASCellLayoutModeDisableRangeController);
+  return !disableRangeController;
 }
 
 - (void)rangeController:(ASRangeController *)rangeController updateWithChangeSet:(_ASHierarchyChangeSet *)changeSet updates:(dispatch_block_t)updates
@@ -2250,7 +2316,9 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
   ASPerformBlockWithoutAnimation(!changeSet.animated, ^{
     as_activity_scope(as_activity_create("Commit collection update", changeSet.rootActivity, OS_ACTIVITY_FLAG_DEFAULT));
     if (changeSet.includesReloadData) {
-      _superIsPendingDataLoad = YES;
+      if (!ASActivateExperimentalFeature(ASExperimentalReloadDataFlagHandling)) {
+        _superIsPendingDataLoad = YES;
+      }
       updates();
       [self _superReloadData:nil completion:nil];
       os_log_debug(ASCollectionLog(), "Did reloadData %@", self.collectionNode);
@@ -2435,6 +2503,14 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
   }
 }
 
+#pragma mark - UIView Overrides
+
+- (id<CAAction>)actionForLayer:(CALayer *)layer forKey:(NSString *)event
+{
+  id<CAAction> uikitAction = [super actionForLayer:layer forKey:event];
+  return ASDisplayNodeActionForLayer(layer, event, self.collectionNode, uikitAction);
+}
+
 - (void)willMoveToSuperview:(UIView *)newSuperview
 {
   if (self.superview == nil && newSuperview != nil) {
@@ -2451,26 +2527,19 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
 
 #pragma mark ASCALayerExtendedDelegate
 
-/**
- * TODO: This code was added when we used @c calculatedSize as the size for 
- * items (e.g. collectionView:layout:sizeForItemAtIndexPath:) and so it
- * was critical that we remeasured all nodes at this time.
- *
- * The assumption was that cv-bounds-size-change -> constrained-size-change, so
- * this was the time when we get new constrained sizes for all items and remeasure
- * them. However, the constrained sizes for items can be invalidated for many other
- * reasons, hence why we never reuse the old constrained size anymore.
- *
- * UICollectionView inadvertently triggers a -prepareLayout call to its layout object
- * between [super setFrame:] and [self layoutSubviews] during size changes. So we need
- * to get in there and re-measure our nodes before that -prepareLayout call.
- * We can't wait until -layoutSubviews or the end of -setFrame:.
- *
- * @see @p testThatNodeCalculatedSizesAreUpdatedBeforeFirstPrepareLayoutAfterRotation
- */
-- (void)layer:(CALayer *)layer didChangeBoundsWithOldValue:(CGRect)oldBounds newValue:(CGRect)newBounds
+/// If bounds changed in non-scrolling direction since last measurement, remeasure.
+- (void)remeasureNodesIfNeededForBoundsChange
 {
-  CGSize newSize = newBounds.size;
+  CGRect bounds = self.bounds;
+
+  // Do not remeasure if bounds are empty. For instance, an app might hide a collection view in
+  // landscape mode by setting its hei_ght to 0. When we get a valid bounds, if it changed in the
+  // non-scrolling direction we will remeasure at that time.
+  if (_collectionViewFlags.skipRemeasureWhenBoundsAreEmpty && CGRectIsEmpty(bounds)) {
+    return;
+  }
+
+  CGSize newSize = bounds.size;
   CGSize lastUsedSize = _lastBoundsSizeUsedForMeasuringNodes;
   if (CGSizeEqualToSize(lastUsedSize, newSize)) {
     return;
@@ -2496,6 +2565,30 @@ static NSString * const kReuseIdentifier = @"_ASCollectionReuseIdentifier";
 
   if (changedInNonScrollingDirection) {
     [self relayoutItems];
+  }
+}
+
+/**
+ * TODO: This code was added when we used @c calculatedSize as the size for 
+ * items (e.g. collectionView:layout:sizeForItemAtIndexPath:) and so it
+ * was critical that we remeasured all nodes at this time.
+ *
+ * The assumption was that cv-bounds-size-change -> constrained-size-change, so
+ * this was the time when we get new constrained sizes for all items and remeasure
+ * them. However, the constrained sizes for items can be invalidated for many other
+ * reasons, hence why we never reuse the old constrained size anymore.
+ *
+ * UICollectionView inadvertently triggers a -prepareLayout call to its layout object
+ * between [super setFrame:] and [self layoutSubviews] during size changes. So we need
+ * to get in there and re-measure our nodes before that -prepareLayout call.
+ * We can't wait until -layoutSubviews or the end of -setFrame:.
+ *
+ * @see @p testThatNodeCalculatedSizesAreUpdatedBeforeFirstPrepareLayoutAfterRotation
+ */
+- (void)layer:(CALayer *)layer didChangeBoundsWithOldValue:(CGRect)oldBounds newValue:(CGRect)newBounds
+{
+  if (_collectionViewFlags.remeasuresBeforeLayoutPass) {
+    [self remeasureNodesIfNeededForBoundsChange];
   }
 }
 

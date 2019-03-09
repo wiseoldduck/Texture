@@ -96,7 +96,7 @@
 {
   // Subclass hook should not be called with the lock held
   DISABLED_ASAssertUnlocked(__instanceLock__);
-  
+
   // Subclasses may override
 }
 
@@ -260,6 +260,22 @@
   } else {
     _displayLink.paused = NO;
   }
+  [self animatedImageTransitionToState:ASAnimatedImageStart];
+}
+
+- (void)animatedImageTransitionToState:(ASAnimatedImageState)toState {
+  ASLockScopeSelf();
+  auto oldState = _animationState;
+  if (oldState == toState && toState != ASAnimatedImageEndLoop) {
+    return;
+  }
+  _animationState = toState;
+  {
+    ASUnlockScope(self)
+    // We may still be locked due to recursive locks from outside. At the time of this writing
+    // no call paths have that, and if we ever encounter it we need to revisit this code.
+    [self animatedImageDidEnterState:toState fromState:oldState];
+  }
 }
 
 - (void)stopAnimating
@@ -284,6 +300,11 @@
   self.lastDisplayLinkFire = 0;
   
   [_animatedImage clearAnimatedImageCache];
+  {
+    ASUnlockScope(self);
+    DISABLED_ASAssertUnlocked(__instanceLock__);
+    [self animatedImageTransitionToState:ASAnimatedImageStopped];
+  }
 }
 
 #pragma mark - ASDisplayNode
@@ -348,7 +369,9 @@
   _playHead += timeBetweenLastFire;
   
   while (_playHead > self.animatedImage.totalDuration) {
-      // Set playhead to zero to keep from showing different frames on different playthroughs
+    // Set playhead to zero to keep from showing different frames on different playthroughs
+    DISABLED_ASAssertUnlocked(__instanceLock__);
+    [self animatedImageTransitionToState:ASAnimatedImageEndLoop];
     _playHead = 0;
     _playedLoops++;
   }

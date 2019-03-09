@@ -398,6 +398,12 @@ static NSArray *DefaultLinkAttributeNames() {
   return UIAccessibilityTraitStaticText;
 }
 
+- (BOOL)performAccessibilityCustomActionLink:(UIAccessibilityCustomAction *)action
+{
+  AS_TEXT_ALERT_UNIMPLEMENTED_FEATURE();
+  return NO;
+}
+
 #pragma mark - Layout and Sizing
 
 - (void)setTextContainerInset:(UIEdgeInsets)textContainerInset
@@ -501,6 +507,9 @@ static NSArray *DefaultLinkAttributeNames() {
    
     // Update attributed text with cleaned attributed string
     _attributedText = cleanedAttributedString;
+    if (self.isNodeLoaded) {
+      [self invalidateAccessibleElementsIfNeeded];
+    }
   }
   
   // Tell the display node superclasses that the cached layout is incorrect now

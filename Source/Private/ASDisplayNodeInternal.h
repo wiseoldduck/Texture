@@ -18,6 +18,7 @@
 #import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
 #import <AsyncDisplayKit/ASLayoutElement.h>
 #import <AsyncDisplayKit/ASLayoutTransition.h>
+#import <AsyncDisplayKit/ASNodeContext+Private.h>
 #import <AsyncDisplayKit/ASThread.h>
 #import <AsyncDisplayKit/_ASTransitionContext.h>
 #import <AsyncDisplayKit/ASWeakSet.h>
@@ -62,6 +63,8 @@ typedef NS_OPTIONS(uint_least32_t, ASDisplayNodeAtomicFlags)
 #define setFlag(flag, x) (((x ? _atomicFlags.fetch_or(flag) \
                               : _atomicFlags.fetch_and(~flag)) & flag) != 0)
 
+#define ASDisplayNodeGetController(obj) (obj->_strongNodeController ?: obj->_weakNodeController)
+
 AS_EXTERN NSString * const ASRenderingEngineDidDisplayScheduledNodesNotification;
 AS_EXTERN NSString * const ASRenderingEngineDidDisplayNodesScheduledBeforeTimestamp;
 
@@ -69,16 +72,14 @@ AS_EXTERN NSString * const ASRenderingEngineDidDisplayNodesScheduledBeforeTimest
 #define VISIBILITY_NOTIFICATIONS_DISABLED_BITS 4
 
 #define TIME_DISPLAYNODE_OPS 0 // If you're using this information frequently, try: (DEBUG || PROFILE)
-static constexpr CACornerMask kASCACornerAllCorners =
-    kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
 
 #define NUM_CLIP_CORNER_LAYERS 4
 
 @interface ASDisplayNode () <_ASTransitionContextCompletionDelegate, CALayerDelegate>
 {
 @package
-  AS::RecursiveMutex __instanceLock__;
-
+  AS::MutexOrPointer __instanceLock__;
+  ASNodeContext *_nodeContext;
   _ASPendingState *_pendingViewState;
 
   UIView *_view;
@@ -148,7 +149,6 @@ static constexpr CACornerMask kASCACornerAllCorners =
   ASDisplayNodePerformanceMeasurementOptions _measurementOptions;
   ASDisplayNodeMethodOverrides _methodOverrides;
 
-@protected
   ASDisplayNode * __weak _supernode;
   NSMutableArray<ASDisplayNode *> *_subnodes;
 
@@ -180,6 +180,7 @@ static constexpr CACornerMask kASCACornerAllCorners =
   NSMutableArray<ASDisplayNode *> *_yogaChildren;
   __weak ASDisplayNode *_yogaParent;
   ASLayout *_yogaCalculatedLayout;
+  ASSizeRange _yogaCalculatedLayoutSizeRange;   // used only in Yoga2
 #endif
 
   // Layout Transition
@@ -225,7 +226,6 @@ static constexpr CACornerMask kASCACornerAllCorners =
   // Corner Radius support
   CGFloat _cornerRadius;
   CALayer *_clipCornerLayers[NUM_CLIP_CORNER_LAYERS];
-  CACornerMask _maskedCorners;
 
   ASDisplayNodeContextModifier _willDisplayNodeContentWithRenderingContext;
   ASDisplayNodeContextModifier _didDisplayNodeContentWithRenderingContext;
@@ -297,9 +297,12 @@ static constexpr CACornerMask kASCACornerAllCorners =
 - (void)__setNodeController:(ASNodeController *)controller;
 
 /**
- * Called whenever the node needs to layout its subnodes and, if it's already loaded, its subviews. Executes the layout pass for the node
+ * Called whenever the node needs to layout its subnodes and, if it's already loaded, its subviews.
+ * Executes the layout pass for the node
  *
- * This method is thread-safe but asserts thread affinity.
+ * This method is thread-safe but requires thread affinity. At the same time, this method currently
+ * requires to be called without the lock held. This means that a race condition is unavoidable when
+ * calling this method from a background thread.
  */
 - (void)__layout;
 
@@ -320,10 +323,8 @@ static constexpr CACornerMask kASCACornerAllCorners =
 /// Display the node's view/layer immediately on the current thread, bypassing the background thread rendering. Will be deprecated.
 - (void)displayImmediately;
 
-/// Refreshes any precomposited or drawn clip corners, setting up state as required to transition corner config.
-- (void)updateCornerRoundingWithType:(ASCornerRoundingType)newRoundingType
-                        cornerRadius:(CGFloat)newCornerRadius
-                       maskedCorners:(CACornerMask)newMaskedCorners;
+/// Refreshes any precomposited or drawn clip corners, setting up state as required to transition radius or rounding type.
+- (void)updateCornerRoundingWithType:(ASCornerRoundingType)newRoundingType cornerRadius:(CGFloat)newCornerRadius;
 
 /// Alternative initialiser for backing with a custom view class.  Supports asynchronous display with _ASDisplayView subclasses.
 - (instancetype)initWithViewClass:(Class)viewClass;
@@ -363,14 +364,14 @@ static constexpr CACornerMask kASCACornerAllCorners =
 // Recalculates fallbackSafeAreaInsets for the subnodes
 - (void)_fallbackUpdateSafeAreaOnChildren;
 
+/// Calls the public method and informs the controller.
+- (BOOL)_shouldDeferAutomaticRemoval;
+
 @end
 
 @interface ASDisplayNode (InternalPropertyBridge)
 
 @property (nonatomic) CGFloat layerCornerRadius;
-
-/// NOTE: Changing this to non-default under iOS < 11 will make an assertion (for the end user to see.)
-@property (nonatomic) CACornerMask layerMaskedCorners;
 
 - (BOOL)_locked_insetsLayoutMarginsFromSafeArea;
 

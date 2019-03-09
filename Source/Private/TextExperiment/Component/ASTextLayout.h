@@ -224,7 +224,8 @@ AS_EXTERN const CGSize ASTextContainerMaxSize;
 @property (nonatomic, readonly) CTFrameRef frame;
 ///< Array of `ASTextLine`, no truncated
 @property (nonatomic, readonly) NSArray<ASTextLine *> *lines;
-///< ASTextLine with truncated token, or nil
+///< ASTextLine with truncated token, or nil. Note that this may be nil if no truncation token was specified.
+///< To check if the entire string was drawn, use NSEqualRanges(visibleRange, range).
 @property (nullable, nonatomic, readonly) ASTextLine *truncatedLine;
 ///< Array of `ASTextAttachment`
 @property (nullable, nonatomic, readonly) NSArray<ASTextAttachment *> *attachments;

@@ -281,6 +281,41 @@
   ASSnapshotVerifyNode(textNode, nil);
 }
 
+- (void)testThatTruncationTokenDefaultInheritsAttributesFromText
+{
+  ASTextNode *textNode = [[ASTextNode alloc] init];
+  textNode.style.maxSize = CGSizeMake(20, 80);
+
+  textNode.attributedText = [[NSMutableAttributedString alloc] initWithString:@"Quality is an important thing" attributes:@{
+    NSForegroundColorAttributeName : [UIColor grayColor],
+    NSUnderlineStyleAttributeName : @(NSUnderlineStyleSingle),
+  }];
+  textNode.truncationMode = NSLineBreakByTruncatingTail;
+  
+  ASDisplayNodeSizeToFitSizeRange(textNode, ASSizeRangeMake(CGSizeZero, CGSizeMake(INFINITY, INFINITY)));
+  ASSnapshotVerifyNode(textNode, nil);
+}
+
+- (void)testThatTruncationTokenAttributesOverwriteThoseInheritedFromTextWhenTruncateTailMode_ASTextNode2
+{
+  ASTextNode *textNode = [[ASTextNode alloc] init];
+  textNode.style.maxSize = CGSizeMake(20, 80);
+
+  NSMutableAttributedString *mas = [[NSMutableAttributedString alloc] initWithString:@"Quality is an important thing" attributes:@{
+    NSForegroundColorAttributeName : [UIColor grayColor],
+    NSUnderlineStyleAttributeName : @(NSUnderlineStyleSingle),
+  }];
+  textNode.attributedText = mas;
+  textNode.truncationMode = NSLineBreakByTruncatingTail;
+
+  textNode.truncationAttributedText = [[NSAttributedString alloc] initWithString:@"\u2026" attributes:@{
+    NSForegroundColorAttributeName : [UIColor greenColor],
+    NSUnderlineStyleAttributeName: @(NSUnderlineStyleNone),
+  }];
+  ASDisplayNodeSizeToFitSizeRange(textNode, ASSizeRangeMake(CGSizeZero, CGSizeMake(INFINITY, INFINITY)));
+  ASSnapshotVerifyNode(textNode, nil);
+}
+
 /**
  * https://github.com/TextureGroup/Texture/issues/822
  */
@@ -294,6 +329,25 @@
   textNode.truncationMode = NSLineBreakByTruncatingTail;
 
   textNode.truncationAttributedText = [[NSAttributedString alloc] initWithString:@"\u2026" attributes:@{ NSBackgroundColorAttributeName: UIColor.greenColor }];
+  ASDisplayNodeSizeToFitSizeRange(textNode, ASSizeRangeMake(CGSizeZero, CGSizeMake(INFINITY, INFINITY)));
+  ASSnapshotVerifyNode(textNode, nil);
+}
+
+- (void)testThatDefaultTruncationTokenAttributesAreInheritedFromTextWhenTruncated_ASTextNode2
+{
+  ASTextNode *textNode = [[ASTextNode alloc] init];
+  textNode.style.maxSize = CGSizeMake(20, 80);
+
+  // Set initial attributed text
+  textNode.attributedText = [[NSMutableAttributedString alloc] initWithString:@"Quality is an important thing" attributes:@{NSForegroundColorAttributeName : [UIColor greenColor]}];
+
+  // Trigger sizing for internal composed truncation text creation
+  ASDisplayNodeSizeToFitSizeRange(textNode, ASSizeRangeMake(CGSizeZero, CGSizeMake(INFINITY, INFINITY)));
+
+  // Change attributed text with different foreground color
+  textNode.attributedText = [[NSAttributedString alloc] initWithString:@"Quality is an important thing" attributes:@{NSForegroundColorAttributeName : [UIColor grayColor]}];
+
+  // Size again and verify snapshot
   ASDisplayNodeSizeToFitSizeRange(textNode, ASSizeRangeMake(CGSizeZero, CGSizeMake(INFINITY, INFINITY)));
   ASSnapshotVerifyNode(textNode, nil);
 }

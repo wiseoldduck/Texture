@@ -30,6 +30,8 @@
  */
 #define AS_CATEGORY_IMPLEMENTABLE
 
+#define AS_EXPECT(x, v) __builtin_expect((x), (v))
+
 #ifdef __GNUC__
 # define ASDISPLAYNODE_GNUC(major, minor) \
 (__GNUC__ > (major) || (__GNUC__ == (major) && __GNUC_MINOR__ >= (minor)))

@@ -779,50 +779,61 @@ dispatch_semaphore_signal(_lock);
 
       // create truncated line
       if (container.truncationType != ASTextTruncationTypeNone) {
+        CTLineTruncationType type = kCTLineTruncationEnd;
+        if (container.truncationType == ASTextTruncationTypeStart) {
+          type = kCTLineTruncationStart;
+        } else if (container.truncationType == ASTextTruncationTypeMiddle) {
+          type = kCTLineTruncationMiddle;
+        }
+
         CTLineRef truncationTokenLine = NULL;
-        if (container.truncationToken) {
-          truncationToken = container.truncationToken;
-          truncationTokenLine = CTLineCreateWithAttributedString((CFAttributedStringRef) truncationToken);
+        truncationToken = container.truncationToken;
+        // For Tail truncation, if the truncation token is empty or only whitespace, we simply take
+        // whatever the Framesetter already generated and go with that (e.g. last word is omitted.)
+        static dispatch_once_t nonWhitespaceCharacterSetOnce;
+        static NSCharacterSet *nonWhitespaceCharacterSet;
+        dispatch_once(&nonWhitespaceCharacterSetOnce, ^{
+          nonWhitespaceCharacterSet = NSCharacterSet.whitespaceCharacterSet.invertedSet;
+        });
+        if (truncationToken && type == kCTLineTruncationEnd && NSNotFound == [truncationToken.string rangeOfCharacterFromSet:nonWhitespaceCharacterSet].location) {
+          // Don't do anything. Reset truncationToken to nil, leave truncationTokenLine as NULL.
+          truncationToken = nil;
         } else {
+          // Form a truncation token from the end of the last line.
           CFArrayRef runs = CTLineGetGlyphRuns(lastLine.CTLine);
           NSUInteger runCount = CFArrayGetCount(runs);
+          NSString *string = ASTextTruncationToken;
           NSMutableDictionary *attrs = nil;
           if (runCount > 0) {
-            CTRunRef run = (CTRunRef) CFArrayGetValueAtIndex(runs, runCount - 1);
-            attrs = (id) CTRunGetAttributes(run);
-            attrs = attrs ? attrs.mutableCopy : [NSMutableArray new];
+
+            // Get last line run
+            CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, runCount - 1);
+
+            // Attributes from last run
+            attrs = (id)CTRunGetAttributes(run);
+            attrs = attrs ? [attrs mutableCopy] : [[NSMutableDictionary alloc] init];
             [attrs removeObjectsForKeys:[NSMutableAttributedString as_allDiscontinuousAttributeKeys]];
-            CTFontRef font = (__bridge CTFontRef) attrs[(id) kCTFontAttributeName];
-            CGFloat fontSize = font ? CTFontGetSize(font) : 12.0;
-            UIFont *uiFont = [UIFont systemFontOfSize:fontSize * 0.9];
-            if (uiFont) {
-              font = CTFontCreateWithName((__bridge CFStringRef) uiFont.fontName, uiFont.pointSize, NULL);
-            } else {
-              font = NULL;
+
+            if (container.truncationToken) {
+              string = container.truncationToken.string;
+
+              // Merge attributes from given truncation token and last line
+              NSDictionary<NSAttributedStringKey, id> *truncationTokenCTAttributes = [container.truncationToken as_ctAttributes];
+              [attrs addEntriesFromDictionary:truncationTokenCTAttributes];
             }
-            if (font) {
-              attrs[(id) kCTFontAttributeName] = (__bridge id) (font);
-              uiFont = nil;
-              CFRelease(font);
-            }
-            CGColorRef color = (__bridge CGColorRef) (attrs[(id) kCTForegroundColorAttributeName]);
+
+            // Ignore clear color
+            CGColorRef color = (__bridge CGColorRef)attrs[(id)kCTForegroundColorAttributeName];
             if (color && CFGetTypeID(color) == CGColorGetTypeID() && CGColorGetAlpha(color) == 0) {
-              // ignore clear color
-              [attrs removeObjectForKey:(id) kCTForegroundColorAttributeName];
+              [attrs removeObjectForKey:(id)kCTForegroundColorAttributeName];
             }
-            if (!attrs) attrs = [NSMutableDictionary new];
           }
-          truncationToken = [[NSAttributedString alloc] initWithString:ASTextTruncationToken attributes:attrs];
-          truncationTokenLine = CTLineCreateWithAttributedString((CFAttributedStringRef) truncationToken);
+          truncationToken = [[NSAttributedString alloc] initWithString:string attributes:attrs];
+          truncationTokenLine = CTLineCreateWithAttributedString((CFAttributedStringRef)truncationToken);
         }
         if (truncationTokenLine) {
-          CTLineTruncationType type = kCTLineTruncationEnd;
-          if (container.truncationType == ASTextTruncationTypeStart) {
-            type = kCTLineTruncationStart;
-          } else if (container.truncationType == ASTextTruncationTypeMiddle) {
-            type = kCTLineTruncationMiddle;
-          }
-          NSMutableAttributedString *lastLineText = [text attributedSubstringFromRange:lastLine.range].mutableCopy;
+          // TODO: Avoid creating this unless we actually modify the last line text.
+          NSMutableAttributedString *lastLineText = [[text attributedSubstringFromRange:lastLine.range] mutableCopy];
           CGFloat truncatedWidth = lastLine.width;
           CGFloat atLeastOneLine = lastLine.width;
           CGRect cgPathRect = CGRectZero;

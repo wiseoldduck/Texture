@@ -19,6 +19,9 @@ typedef NS_ENUM(uint32_t, ASSignpostName) {
   
   // Layout
   ASSignpostCalculateLayout = 350,        // Start of calculateLayoutThatFits to end. Max 1 per thread.
+  ASSignpostMeasure,                      // Start of measure to end.
+  ASSignpostMeasureText,                  // Text layout cache miss.
+  ASSignpostRemeasureCollection,          // Rotation/bounds change remeasure batch.
   
   // Misc
   ASSignpostDeallocQueueDrain = 375,      // One chunk of dealloc queue work. arg0 is count.

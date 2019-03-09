@@ -59,6 +59,11 @@
   return [self.asyncdisplaykit_node accessibilityElements];
 }
 
+- (id<CAAction>)actionForLayer:(CALayer *)layer forKey:(NSString *)event {
+  id<CAAction> uikitAction = [super actionForLayer:layer forKey:event];
+  return ASDisplayNodeActionForLayer(layer, event, self.scrollNode, uikitAction);
+}
+
 @end
 
 @implementation ASScrollNode
@@ -149,6 +154,15 @@
     self.view.contentSize = contentSize;
   }
 }
+
+#if YOGA
+- (void)enterHierarchyState:(ASHierarchyState)hierarchyState {
+  [super enterHierarchyState:hierarchyState];
+  if (ASHierarchyStateIncludesYoga2(hierarchyState)) {
+    self.style.overflow = YGOverflowScroll;
+  }
+}
+#endif
 
 - (BOOL)automaticallyManagesContentSize
 {

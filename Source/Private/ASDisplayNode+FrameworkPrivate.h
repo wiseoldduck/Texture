@@ -36,18 +36,25 @@ typedef NS_OPTIONS(unsigned char, ASHierarchyState)
   /** The node may or may not have a supernode, but no supernode has a special hierarchy-influencing option enabled. */
   ASHierarchyStateNormal                  = 0,
   /** The node has a supernode with .rasterizesSubtree = YES.
-      Note: the root node of the rasterized subtree (the one with the property set on it) will NOT have this state set. */
-  ASHierarchyStateRasterized              = 1 << 0,
-  /** The node or one of its supernodes is managed by a class like ASRangeController.  Most commonly, these nodes are
-      ASCellNode objects or a subnode of one, and are used in ASTableView or ASCollectionView.
-      These nodes also receive regular updates to the .interfaceState property with more detailed status information. */
-  ASHierarchyStateRangeManaged            = 1 << 1,
-  /** Down-propagated version of _flags.visibilityNotificationsDisabled.  This flag is very rarely set, but by having it
-      locally available to nodes, they do not have to walk up supernodes at the critical points it is checked. */
+      Note: the root node of the rasterized subtree (the one with the property set on it) will NOT
+     have this state set. */
+  ASHierarchyStateRasterized = 1 << 0,
+  /** The node or one of its supernodes is managed by a class like ASRangeController.  Most
+     commonly, these nodes are ASCellNode objects or a subnode of one, and are used in ASTableView
+     or ASCollectionView. These nodes also receive regular updates to the .interfaceState property
+     with more detailed status information. */
+  ASHierarchyStateRangeManaged = 1 << 1,
+  /** Down-propagated version of _flags.visibilityNotificationsDisabled.  This flag is very rarely
+     set, but by having it
+      locally available to nodes, they do not have to walk up supernodes at the critical points it
+     is checked. */
   ASHierarchyStateTransitioningSupernodes = 1 << 2,
   /** One of the supernodes of this node is performing a transition.
-      Any layout calculated during this state should not be applied immediately, but pending until later. */
-  ASHierarchyStateLayoutPending           = 1 << 3,
+      Any layout calculated during this state should not be applied immediately, but pending until
+     later. */
+  ASHierarchyStateLayoutPending = 1 << 3,
+  /** Whether the 2nd generation yoga engine is enabled for this tree. */
+  ASHierarchyStateYoga2 = 1 << 4,
 };
 
 ASDISPLAYNODE_INLINE BOOL ASHierarchyStateIncludesLayoutPending(ASHierarchyState hierarchyState)
@@ -68,6 +75,10 @@ ASDISPLAYNODE_INLINE BOOL ASHierarchyStateIncludesRasterized(ASHierarchyState hi
 ASDISPLAYNODE_INLINE BOOL ASHierarchyStateIncludesTransitioningSupernodes(ASHierarchyState hierarchyState)
 {
 	return ((hierarchyState & ASHierarchyStateTransitioningSupernodes) == ASHierarchyStateTransitioningSupernodes);
+}
+
+ASDISPLAYNODE_INLINE BOOL ASHierarchyStateIncludesYoga2(ASHierarchyState hierarchyState) {
+  return ((hierarchyState & ASHierarchyStateYoga2) == ASHierarchyStateYoga2);
 }
 
 __unused static NSString * _Nonnull NSStringFromASHierarchyState(ASHierarchyState hierarchyState)
@@ -108,6 +119,7 @@ __unused static NSString * _Nonnull NSStringFromASHierarchyStateChange(ASHierarc
   HIERARCHY_STATE_DELTA(RangeManaged);
   HIERARCHY_STATE_DELTA(TransitioningSupernodes);
   HIERARCHY_STATE_DELTA(LayoutPending);
+  HIERARCHY_STATE_DELTA(Yoga2);
   [changes appendString:@"}"];
   return changes;
 }
@@ -154,6 +166,7 @@ __unused static NSString * _Nonnull NSStringFromASHierarchyStateChange(ASHierarc
  */
 @property (nonatomic) ASHierarchyState hierarchyState;
 
+@property (nonatomic, weak) UIAccessibilityCustomAction *acessibilityCustomAction;
 /**
  * Represent the current custom action in representation for the node
  */
@@ -320,8 +333,36 @@ NS_INLINE UIAccessibilityTraits ASInteractiveAccessibilityTraitsMask() {
   return UIAccessibilityTraitLink | UIAccessibilityTraitKeyboardKey | UIAccessibilityTraitButton;
 }
 
+// dispatch_once variables must live outside of static inline function or else will be copied
+// for each separate invocation. We want them shared across all invocations.
+static BOOL shouldEnableAccessibilityForTesting;
+static dispatch_once_t kShouldEnableAccessibilityForTestingOnceToken;
+NS_INLINE BOOL ASAccessibilityIsEnabled() {
+#if DEBUG
+  return true;
+#else
+  if (UIAccessibilityIsVoiceOverRunning()) {
+    return true;
+  }
+  // In some ui test environment where DEBUG is not defined.
+  dispatch_once(&kShouldEnableAccessibilityForTestingOnceToken, ^{
+    shouldEnableAccessibilityForTesting = [[[NSProcessInfo processInfo] arguments]
+        containsObject:@"AS_FORCE_ACCESSIBILITY_FOR_TESTING"];
+  });
+  return shouldEnableAccessibilityForTesting;
+#endif
+}
+
 @interface ASDisplayNode (AccessibilityInternal)
+
 - (NSArray *)accessibilityElements;
+
+/**
+ * @discussion call this when a layer backed noded is changed(added/removed/updated) or
+ * a view which in an a11y container is changed.
+ */
+- (void)invalidateAccessibleElementsIfNeeded;
+
 @end;
 
 @interface UIView (ASDisplayNodeInternal)

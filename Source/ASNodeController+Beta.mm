@@ -9,16 +9,22 @@
 
 #import <AsyncDisplayKit/ASDisplayNodeInternal.h>
 #import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
+#import <AsyncDisplayKit/ASNodeContext+Private.h>
 #import <AsyncDisplayKit/ASNodeController+Beta.h>
+#import <AsyncDisplayKit/ASNodeControllerInternal.h>
 #import <AsyncDisplayKit/ASThread.h>
 
 #define _node (_shouldInvertStrongReference ? _weakNode : _strongNode)
 
 @implementation ASNodeController
+
+- (instancetype)init
 {
-  ASDisplayNode *_strongNode;
-  __weak ASDisplayNode *_weakNode;
-  AS::RecursiveMutex __instanceLock__;
+  if (self = [super init]) {
+    _nodeContext = ASNodeContextGet();
+    __instanceLock__.Configure(_nodeContext ? &_nodeContext->_mutex : nullptr) ;
+  }
+  return self;
 }
 
 - (void)loadNode
@@ -31,7 +37,12 @@
 {
   ASLockScopeSelf();
   if (_node == nil) {
+    ASNodeContextPush(_nodeContext);
     [self loadNode];
+    ASNodeContextPop();
+    ASDisplayNodeAssert(_nodeContext == [_node nodeContext],
+                        @"Controller and node must share context.\n%@\nvs\n%@", _nodeContext,
+                        [_node nodeContext]);
   }
   return _node;
 }
@@ -90,23 +101,28 @@
 - (void)interfaceStateDidChange:(ASInterfaceState)newState
                       fromState:(ASInterfaceState)oldState {}
 
+- (BOOL)nodeShouldDeferAutomaticRemoval {
+  return NO;
+}
+
 - (void)hierarchyDisplayDidFinish {}
 
 - (void)didEnterHierarchy {}
 - (void)didExitHierarchy  {}
 
-- (ASLockSet)lockPair {
-  ASLockSet lockSet = ASLockSequence(^BOOL(ASAddLockBlock addLock) {
-    if (!addLock(_node)) {
-      return NO;
+- (AS::LockSet)lockPair {
+  AS::LockSet locks;
+  while (locks.empty()) {
+    // If we have a node context, we just need to lock it. Nothing else.
+    if (_nodeContext) {
+      if (!locks.TryAdd(_nodeContext, _nodeContext->_mutex)) continue;
+      break;
     }
-    if (!addLock(self)) {
-      return NO;
-    }
-    return YES;
-  });
+    if (_node && !locks.TryAdd(_node, _node->__instanceLock__)) continue;
+    if (!locks.TryAdd(self, __instanceLock__)) continue;
+  }
 
-  return lockSet;
+  return locks;
 }
 
 #pragma mark NSLocking

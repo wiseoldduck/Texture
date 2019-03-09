@@ -132,6 +132,8 @@ AS_CATEGORY_IMPLEMENTABLE
 AS_CATEGORY_IMPLEMENTABLE
 - (void)willCalculateLayout:(ASSizeRange)constrainedSize NS_REQUIRES_SUPER;
 
+AS_CATEGORY_IMPLEMENTABLE
+- (void)didCalculateLayout:(ASSizeRange)constrainedSize NS_REQUIRES_SUPER;
 /**
  * Only ASLayoutRangeModeVisibleOnly or ASLayoutRangeModeLowMemory are recommended.  Default is ASLayoutRangeModeVisibleOnly,
  * because this is the only way to ensure an application will not have blank / flashing views as the user navigates back after
@@ -166,6 +168,30 @@ AS_CATEGORY_IMPLEMENTABLE
  */
 - (void)enableSubtreeRasterization;
 
+/**
+ * Enable the 2nd-generation yoga layout engine for this node and its subtree.
+ *
+ * Note: You cannot add a yoga2 node to a parent that does not have yoga2 enabled. The entire yoga
+ * tree must be one way or the other.
+ */
+- (void)enableYoga2;
+
+/**
+ * Returns YES if the node will have a custom measure function. This means that, when using the
+ * Yoga2 layout engine, the node cannot have any children.
+ */
+- (BOOL)hasCustomMeasure;
+
+/**
+ * @abstract Called when the node's layer is about to enter the hierarchy.
+ * @discussion May be called more than once if the layer is participating in a higher-level
+ * animation, such as a UIViewController transition. These animations can cause the layer to get
+ * re-parented multiple times, and each time will trigger this call.
+ * @note This method is guaranteed to be called on main.
+ */
+
+AS_CATEGORY_IMPLEMENTABLE
+- (void)didEnterHierarchy;
 @end
 
 NS_ASSUME_NONNULL_END

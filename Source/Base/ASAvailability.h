@@ -68,7 +68,10 @@
 // This reduces Yoga-specific code in other files.
 // NOTE: Yoga integration is experimental and not fully tested. Use with caution and test layouts carefully.
 #ifndef YOGA_HEADER_PATH
-  #define YOGA_HEADER_PATH <yoga/Yoga.h>
+  #define YOGA_HEADER_PATH "third_party/yoga/yoga/Yoga.h"
+  #define YOGA_PRINT_HEADER_PATH "third_party/yoga/yoga/YGNodePrint.h"
+  #define YOGA_CXX_HEADER_PATH "third_party/yoga/yoga/YGNode.h"
+  #define YOGA_UTILS_HEADER_PATH "third_party/yoga/yoga/Utils.h"
 #endif
 
 #ifndef YOGA

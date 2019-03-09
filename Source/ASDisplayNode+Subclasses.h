@@ -303,6 +303,15 @@ AS_CATEGORY_IMPLEMENTABLE
 - (void)didEnterHierarchy ASDISPLAYNODE_REQUIRES_SUPER;
 
 /**
+ * Called when the node or one of its ancestors will be removed due to automatic subnode management.
+ *
+ * If you return YES, the removal will be committed after any animations you add in this method are
+ * completed. If you return NO (the default), the removal will be committed immediately.
+ */
+AS_CATEGORY_IMPLEMENTABLE
+- (BOOL)shouldDeferAutomaticRemoval ASDISPLAYNODE_REQUIRES_SUPER;
+
+/**
  * @abstract Whether the view or layer of this display node is currently in a window
  */
 @property (readonly, getter=isInHierarchy) BOOL inHierarchy;

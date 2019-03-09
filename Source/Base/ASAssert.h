@@ -20,6 +20,23 @@
 #endif
 
 /**
+ * Check a precondition in production and return the given value if it fails.
+ * Note that this hides an early return! So always use cleanups or RAII objects
+ * rather than manual cleanup.
+ */
+#define AS_PRECONDITION(expr, __return_value, ...) \
+  if (!AS_EXPECT(expr, 1)) {                       \
+    ASDisplayNodeFailAssert(__VA_ARGS__);          \
+    return __return_value;                         \
+  }
+
+#define AS_C_PRECONDITION(expr, __return_value, ...) \
+  if (!AS_EXPECT(expr, 1)) {                         \
+    ASDisplayNodeCFailAssert(__VA_ARGS__);           \
+    return __return_value;                           \
+  }
+
+/**
  * Note: In some cases it would be sufficient to do e.g.:
  *  ASDisplayNodeAssert(...) NSAssert(__VA_ARGS__)
  * but we prefer not to, because we want to match the autocomplete behavior of NSAssert.

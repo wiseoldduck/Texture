@@ -23,12 +23,21 @@ NS_ASSUME_NONNULL_BEGIN
  */
 typedef UIImage * _Nullable (^asimagenode_modification_block_t)(UIImage *image);
 
+typedef NS_ENUM(NSUInteger, ASAnimatedImageState) {
+  ASAnimatedImageUnknown,
+  ASAnimatedImageStart,
+  ASAnimatedImageEndLoop,
+  ASAnimatedImageStopped
+};
 
 /**
  * @abstract Draws images.
  * @discussion Supports cropping, tinting, and arbitrary image modification blocks.
  */
-@interface ASImageNode : ASControlNode
+@interface ASImageNode : ASControlNode {
+ @package
+  ASAnimatedImageState _animationState;
+}
 
 /**
  * @abstract The image to display.
@@ -175,6 +184,12 @@ typedef UIImage * _Nullable (^asimagenode_modification_block_t)(UIImage *image);
  * has been set on the node.
  */
 - (void)animatedImageSet:(nullable id <ASAnimatedImageProtocol>)newAnimatedImage previousAnimatedImage:(nullable id <ASAnimatedImageProtocol>)previousAnimatedImage ASDISPLAYNODE_REQUIRES_SUPER;
+
+/**
+ * @abstract Method called each time when animated image finish looping.
+ */
+- (void)animatedImageDidEnterState:(ASAnimatedImageState)state
+                         fromState:(ASAnimatedImageState)fromState;
 
 @end
 

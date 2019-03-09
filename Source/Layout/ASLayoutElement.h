@@ -16,6 +16,10 @@
 #import <AsyncDisplayKit/ASAsciiArtBoxCreator.h>
 #import <AsyncDisplayKit/ASLocking.h>
 
+#if YOGA
+#import YOGA_HEADER_PATH
+#endif
+
 @class ASLayout;
 @class ASLayoutSpec;
 @protocol ASLayoutElementStylability;
@@ -74,6 +78,17 @@ typedef NS_ENUM(unsigned char, ASLayoutElementType) {
 - (nullable NSArray<id<ASLayoutElement>> *)sublayoutElements;
 
 #pragma mark - Calculate layout
+
+/**
+ * @abstract Measure the node. May be called from any thread.
+ *
+ * @param sizeRange The size range against which to measure the node.
+ * @return The size of the appropriate layout within sizeRange.
+ *
+ * @discussion Calling this method is equivalent to calling -layoutThatFits: and reading the size.
+ * This method may be faster because it may not require generating the ASLayout tree.
+ */
+- (CGSize)measure:(ASSizeRange)sizeRange;
 
 /**
  * @abstract Asks the node to return a layout based on given size range.
@@ -160,6 +175,7 @@ AS_EXTERN NSString * const ASLayoutElementStyleFlexBasisProperty;
 AS_EXTERN NSString * const ASLayoutElementStyleAlignSelfProperty;
 AS_EXTERN NSString * const ASLayoutElementStyleAscenderProperty;
 AS_EXTERN NSString * const ASLayoutElementStyleDescenderProperty;
+AS_EXTERN NSString *const ASLayoutElementStyleOverflowProperty;
 
 AS_EXTERN NSString * const ASLayoutElementStyleLayoutPositionProperty;
 
@@ -292,6 +308,15 @@ AS_EXTERN NSString * const ASLayoutElementStyleLayoutPositionProperty;
  * relative size, the child’s maximum relative size will be enforced and its size will extend out of the layout spec’s.
  */
 @property (nonatomic) ASLayoutSize maxLayoutSize;
+
+#if YOGA
+
+/**
+ * @abstract The overflow mode for this container. Only available in yoga.
+ */
+@property(nonatomic) YGOverflow overflow;
+
+#endif
 
 @end
 

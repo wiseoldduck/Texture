@@ -207,6 +207,11 @@ AS_EXTERN UIColor *ASDisplayNodeDefaultTintColor(void) AS_WARN_UNUSED_RESULT;
 AS_EXTERN void ASDisplayNodeDisableHierarchyNotifications(ASDisplayNode *node);
 AS_EXTERN void ASDisplayNodeEnableHierarchyNotifications(ASDisplayNode *node);
 
+/**
+ Returns the CAAction to apply to this node.
+ */
+AS_EXTERN id<CAAction>ASDisplayNodeActionForLayer(CALayer *layer, NSString *event, ASDisplayNode *node, id<CAAction> uikitAction);
+
 // Not to be called directly.
 AS_EXTERN void _ASSetDebugNames(Class owningClass, NSString *names, ASDisplayNode * _Nullable object, ...);
 

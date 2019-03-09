@@ -59,6 +59,8 @@ AS_SUBCLASSING_RESTRICTED
  */
 AS_SUBCLASSING_RESTRICTED
 @interface ASCATransactionQueue : ASAbstractRunLoopQueue
+@property (class, readonly) ASCATransactionQueue *sharedQueue;
++ (ASCATransactionQueue *)sharedQueue NS_RETURNS_RETAINED;
 
 @property (readonly) BOOL isEmpty;
 

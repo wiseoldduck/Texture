@@ -201,6 +201,16 @@ AS_EXTERN NSString * const ASCollectionInvalidUpdateException;
  */
 @property (nonatomic, weak) id<ASDataControllerLayoutDelegate> layoutDelegate;
 
+/**
+ * See ASCollectionNode+Beta.h for full documentation.
+ */
+@property (nonatomic) BOOL immediatelyApplyComputedLayouts;
+
+/**
+ * See ASCollectionNode+Beta.h for full documentation.
+ */
+@property (nonatomic) NSUInteger updateBatchSize;
+
 #ifdef __cplusplus
 /**
  * Returns the most recently gathered item counts from the data source. If the counts

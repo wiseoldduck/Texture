@@ -29,6 +29,11 @@ AS_EXTERN NSMutableArray<NSMutableArray *> *ASTwoDimensionalArrayDeepMutableCopy
 AS_EXTERN void ASDeleteElementsInTwoDimensionalArrayAtIndexPaths(NSMutableArray *mutableArray, NSArray<NSIndexPath *> *indexPaths);
 
 /**
+ * Delete the elements of the mutable two-dimensional array at given index path.
+ */
+AS_EXTERN void ASDeleteElementInTwoDimensionalArrayAtIndexPath(NSMutableArray *mutableArray, NSIndexPath *indexPath);
+
+/**
  * Return all the index paths of a two-dimensional array, in ascending order.
  */
 AS_EXTERN NSArray<NSIndexPath *> *ASIndexPathsForTwoDimensionalArray(NSArray<NSArray *>* twoDimensionalArray) AS_WARN_UNUSED_RESULT;

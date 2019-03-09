@@ -691,6 +691,13 @@ static ASWeakMap<ASImageNodeContentsKey *, UIImage *> *cache = nil;
   _imageModificationBlock = imageModificationBlock;
 }
 
+#pragma mark - aminated image
+
+- (void)animatedImageDidEnterState:(ASAnimatedImageState)state
+                         fromState:(ASAnimatedImageState)fromState {
+  // Subclass hook.
+}
+
 #pragma mark - Debug
 
 - (void)layout

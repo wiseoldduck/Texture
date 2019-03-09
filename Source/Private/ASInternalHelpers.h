@@ -22,6 +22,10 @@ AS_EXTERN void ASInitializeFrameworkMainThread(void);
 AS_EXTERN BOOL ASDefaultAllowsGroupOpacity(void);
 AS_EXTERN BOOL ASDefaultAllowsEdgeAntialiasing(void);
 
+/// ASTraitCollection is probably a better place to look on iOS >= 10
+/// This _may not be set_ if AS_INITIALIZE_FRAMEWORK_MANUALLY is not set or we are used by an extension
+AS_EXTERN NSNumber *ASApplicationUserInterfaceLayoutDirection(void);
+
 AS_EXTERN BOOL ASSubclassOverridesSelector(Class superclass, Class subclass, SEL selector);
 AS_EXTERN BOOL ASSubclassOverridesClassSelector(Class superclass, Class subclass, SEL selector);
 

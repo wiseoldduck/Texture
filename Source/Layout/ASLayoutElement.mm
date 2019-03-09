@@ -7,13 +7,15 @@
 //  Licensed under Apache 2.0: http://www.apache.org/licenses/LICENSE-2.0
 //
 
-#import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
 #import <AsyncDisplayKit/ASAvailability.h>
+#import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
+#import <AsyncDisplayKit/ASDisplayNode+Yoga2.h>
+#import <AsyncDisplayKit/ASDisplayNodeInternal.h>
+#import <AsyncDisplayKit/ASInternalHelpers.h>
 #import <AsyncDisplayKit/ASLayout.h>
 #import <AsyncDisplayKit/ASLayoutElement.h>
-#import <AsyncDisplayKit/ASThread.h>
 #import <AsyncDisplayKit/ASObjectDescriptionHelpers.h>
-#import <AsyncDisplayKit/ASInternalHelpers.h>
+#import <AsyncDisplayKit/ASThread.h>
 
 #import <atomic>
 
@@ -23,6 +25,8 @@ using AS::MutexLocker;
   #import YOGA_HEADER_PATH
   #import <AsyncDisplayKit/ASYogaUtilities.h>
 #endif
+
+using namespace AS;
 
 #pragma mark - ASLayoutElementContext
 
@@ -139,6 +143,7 @@ NSString * const ASYogaMarginProperty = @"ASYogaMarginProperty";
 NSString * const ASYogaPaddingProperty = @"ASYogaPaddingProperty";
 NSString * const ASYogaBorderProperty = @"ASYogaBorderProperty";
 NSString * const ASYogaAspectRatioProperty = @"ASYogaAspectRatioProperty";
+NSString *const ASYogaOverflowProperty = @"ASYogaOverflowProperty";
 #endif
 
 #define ASLayoutElementStyleSetSizeWithScope(x)                                    \
@@ -189,6 +194,7 @@ do {\
   std::atomic<ASEdgeInsets> _padding;
   std::atomic<ASEdgeInsets> _border;
   std::atomic<CGFloat> _aspectRatio;
+  std::atomic<YGOverflow> _overflow;
   ASStackLayoutAlignItems _parentAlignStyle;
 #endif
 }
@@ -664,7 +670,6 @@ ASSynthesizeLockingMethodsWithMutex(__instanceLock__)
 {
 #if YOGA
   /* TODO(appleguy): STYLE SETTER METHODS LEFT TO IMPLEMENT
-   void YGNodeStyleSetOverflow(YGNodeRef node, YGOverflow overflow);
    void YGNodeStyleSetFlex(YGNodeRef node, float flex);
    */
 
@@ -760,6 +765,8 @@ ASSynthesizeLockingMethodsWithMutex(__instanceLock__)
     if (aspectRatio > FLT_EPSILON && aspectRatio < CGFLOAT_MAX / 2.0) {
       YGNodeStyleSetAspectRatio(_yogaNode, aspectRatio);
     }
+  } else if (propertyName == ASYogaOverflowProperty) {
+    YGNodeStyleSetOverflow(_yogaNode, self.overflow);
   }
 #endif
 }
@@ -771,6 +778,7 @@ ASSynthesizeLockingMethodsWithMutex(__instanceLock__)
 + (void)initialize
 {
   [super initialize];
+  // NOTE: This code is only relevant to Yoga1. Yoga2 has its own YGConfig.
   YGConfigSetPointScaleFactor(YGConfigGetDefault(), ASScreenScale());
   // Yoga recommends using Web Defaults for all new projects. This will be enabled for Texture very soon.
   //YGConfigSetUseWebDefaults(YGConfigGetDefault(), true);
@@ -792,8 +800,13 @@ ASSynthesizeLockingMethodsWithMutex(__instanceLock__)
 - (void)destroyYogaNode
 {
   if (_yogaNode != NULL) {
-    // Release the __bridge_retained Context object.
-    ASLayoutElementYogaUpdateMeasureFunc(_yogaNode, nil);
+    if (ASDisplayNode *delegateAsNode = ASDynamicCast(_delegate, ASDisplayNode)) {
+      MutexLocker l(delegateAsNode->__instanceLock__);
+      if (!Yoga2::GetEnabled(delegateAsNode)) {
+        // Release the __bridge_retained Context object.
+        ASLayoutElementYogaUpdateMeasureFunc(_yogaNode, nil);
+      }
+    }
     YGNodeFree(_yogaNode);
     _yogaNode = NULL;
   }
@@ -884,7 +897,14 @@ ASSynthesizeLockingMethodsWithMutex(__instanceLock__)
 - (void)setParentAlignStyle:(ASStackLayoutAlignItems)style {
   _parentAlignStyle = style;
 }
-
+- (void)setOverflow:(YGOverflow)overflow {
+  if (_overflow.exchange(overflow) != overflow) {
+    ASLayoutElementStyleCallDelegate(ASYogaOverflowProperty);
+  }
+}
+- (YGOverflow)overflow {
+  return _overflow;
+}
 #endif /* YOGA */
 
 @end

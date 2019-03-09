@@ -33,7 +33,7 @@ NS_INLINE ASConfigurationManager *ASConfigurationManagerGet() {
 {
   ASConfiguration *config = [[ASConfiguration alloc] init];
   // TODO(wsdwsd0829): Fix #788 before enabling it.
-  // config.experimentalFeatures = ASExperimentalInterfaceStateCoalescing;
+  config.experimentalFeatures = ASExperimentalInterfaceStateCoalescing;
   return config;
 }
 

@@ -6,9 +6,13 @@
 //  Licensed under Apache 2.0: http://www.apache.org/licenses/LICENSE-2.0
 //
 
-#import <AsyncDisplayKit/ASYogaUtilities.h>
+#import <AsyncDisplayKit/ASDisplayNode+Yoga2.h>
 #import <AsyncDisplayKit/ASLayoutElementStylePrivate.h>
+#import <AsyncDisplayKit/ASYogaUtilities.h>
+
 #if YOGA /* YOGA */
+
+using namespace AS;
 
 @implementation ASDisplayNode (YogaHelpers)
 
@@ -80,6 +84,7 @@ YGJustify yogaJustifyContent(ASStackLayoutJustifyContent justifyContent)
     case ASStackLayoutJustifyContentEnd:          return YGJustifyFlexEnd;
     case ASStackLayoutJustifyContentSpaceBetween: return YGJustifySpaceBetween;
     case ASStackLayoutJustifyContentSpaceAround:  return YGJustifySpaceAround;
+    case ASStackLayoutJustifyContentSpaceEvenly:  return YGJustifySpaceEvenly;
   }
 }
 

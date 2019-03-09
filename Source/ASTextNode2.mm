@@ -13,6 +13,7 @@
 #import <deque>
 
 #import <AsyncDisplayKit/_ASDisplayLayer.h>
+#import <AsyncDisplayKit/_ASDisplayViewAccessiblity.h>
 #import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
 #import <AsyncDisplayKit/ASDisplayNode+Subclasses.h>
 #import <AsyncDisplayKit/ASDisplayNodeExtras.h>
@@ -27,8 +28,50 @@
 
 #import <AsyncDisplayKit/CoreGraphics+ASConvenience.h>
 #import <AsyncDisplayKit/ASObjectDescriptionHelpers.h>
+#import <AsyncDisplayKit/ASSignpost.h>
 #import <AsyncDisplayKit/ASTextLayout.h>
 #import <AsyncDisplayKit/ASThread.h>
+
+@interface ASTextNodeAccessiblityElement : UIAccessibilityElement
+
+@property (assign) NSRange accessibilityRange;
+
+@end
+
+@implementation ASTextNodeAccessiblityElement
+
+- (instancetype)initWithAccessibilityContainer:(id)container
+{
+  self = [super initWithAccessibilityContainer:container];
+  if (self) {
+    _accessibilityRange = NSMakeRange(NSNotFound, 0);
+  }
+  return self;
+}
+
+/// Uses the given layout, node and container node to calculate the accessibility frame for
+/// the ASTextNodeAccessiblityElement in screen coordinates.
+- (void)updateFrameWithLayout:(ASTextLayout *)layout containerNode:(nullable ASDisplayNode *) containerNode textNode:(ASDisplayNode *)node
+{
+  // This needs to be in the first non layer nodes coordinates space
+  containerNode = containerNode ?: ASFindClosestViewOfLayer(node.layer).asyncdisplaykit_node;
+  NSCAssert(containerNode != nil, @"No container node found");
+  CGRect textLayoutFrame = CGRectZero;
+  NSRange accessibilityRange = self.accessibilityRange;
+  if (accessibilityRange.location == NSNotFound) {
+    // If no accessibilityRange was specified (as is done for the text element), just use the
+    // label's range and clamp to the visible range otherwise the returned rect would be invalid.
+    NSRange range = NSMakeRange(0, self.accessibilityLabel.length);
+    range = NSIntersectionRange(range, layout.visibleRange);
+    textLayoutFrame = [layout rectForRange:[ASTextRange rangeWithRange:range]];
+  } else {
+    textLayoutFrame = [layout rectForRange:[ASTextRange rangeWithRange:accessibilityRange]];
+  }
+  CGRect accessibilityFrame = [node convertRect:textLayoutFrame toNode:containerNode];
+  self.accessibilityFrame = UIAccessibilityConvertFrameToScreenCoordinates(accessibilityFrame, containerNode.view);
+}
+
+@end
 
 @interface ASTextCacheValue : NSObject {
   @package
@@ -122,7 +165,9 @@ static NS_RETURNS_RETAINED ASTextLayout *ASTextNodeCompatibleLayoutWithContainer
   }
 
   // Cache Miss. Compute the text layout.
+  ASSignpostStart(MeasureText, cacheValue, "%@", [text.string substringToIndex:MIN(text.length, 10)]);
   ASTextLayout *layout = [ASTextLayout layoutWithContainer:container text:text];
+  ASSignpostEnd(MeasureText, cacheValue, "");
 
   // Store the result in the cache.
   {
@@ -164,7 +209,6 @@ static NSString *ASTextNodeTruncationTokenAttributeName = @"ASTextNodeTruncation
   NSAttributedString *_attributedText;
   NSAttributedString *_truncationAttributedText;
   NSAttributedString *_additionalTruncationMessage;
-  NSAttributedString *_composedTruncationText;
   NSArray<NSNumber *> *_pointSizeScaleFactors;
   NSLineBreakMode _truncationMode;
   
@@ -213,7 +257,7 @@ static NSArray *DefaultLinkAttributeNames() {
     self.linkAttributeNames = DefaultLinkAttributeNames();
 
     // Accessibility
-    self.isAccessibilityElement = YES;
+    self.isAccessibilityElement = !ASActivateExperimentalFeature(ASExperimentalTextNode2A11YContainer);
     self.accessibilityTraits = self.defaultAccessibilityTraits;
     
     // Placeholders
@@ -292,7 +336,10 @@ static NSArray *DefaultLinkAttributeNames() {
   for (NSString *linkAttributeName in _linkAttributeNames) {
     __block BOOL hasLink = NO;
     [attributedText enumerateAttribute:linkAttributeName inRange:range options:NSAttributedStringEnumerationLongestEffectiveRangeNotRequired usingBlock:^(id  _Nullable value, NSRange range, BOOL * _Nonnull stop) {
-      hasLink = (value != nil);
+      if (value == nil) {
+        return;
+      }
+      hasLink = YES;
       *stop = YES;
     }];
     if (hasLink) {
@@ -311,6 +358,96 @@ static NSArray *DefaultLinkAttributeNames() {
 - (UIAccessibilityTraits)defaultAccessibilityTraits
 {
   return UIAccessibilityTraitStaticText;
+}
+
+- (BOOL)isAccessibilityElement
+{
+  if (!ASActivateExperimentalFeature(ASExperimentalTextNode2A11YContainer)) {
+    return [super isAccessibilityElement];
+  }
+
+  // If the ASTextNode2 should act as an UIAccessibilityContainer it has to return
+  // NO for isAccessibilityElement
+  return NO;
+}
+
+- (NSInteger)accessibilityElementCount
+{
+  if (!ASActivateExperimentalFeature(ASExperimentalTextNode2A11YContainer)) {
+    return [super accessibilityElementCount];
+  }
+
+  return self.accessibilityElements.count;
+}
+
+- (NSArray *)accessibilityElements
+{
+  if (!ASActivateExperimentalFeature(ASExperimentalTextNode2A11YContainer)) {
+    return [super accessibilityElements];
+  }
+
+  NSInteger attributedTextLength = _attributedText.length;
+  if (attributedTextLength == 0) {
+    return @[];
+  }
+
+  NSMutableArray<ASTextNodeAccessiblityElement *> *accessibilityElements = [[NSMutableArray alloc] init];
+
+  // Search the first node that is not layer backed
+  ASDisplayNode *containerNode = ASFindClosestViewOfLayer(self.layer).asyncdisplaykit_node;
+  NSCAssert(containerNode != nil, @"No container node found");
+  ASTextLayout *layout = ASTextNodeCompatibleLayoutWithContainerAndText(_textContainer, _attributedText);
+
+  // Create an accessibility element to represent the label's text. It's not necessary to specify
+  // a accessibilityRange here, as the entirety of the text is being represented.
+  ASTextNodeAccessiblityElement *accessibilityElement = [[ASTextNodeAccessiblityElement alloc] initWithAccessibilityContainer:containerNode.view];
+  accessibilityElement.accessibilityLabel = self.accessibilityLabel;
+  accessibilityElement.accessibilityValue = self.accessibilityValue;
+  accessibilityElement.accessibilityTraits = self.accessibilityTraits;
+  if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
+    accessibilityElement.accessibilityAttributedLabel = self.accessibilityAttributedLabel;
+    accessibilityElement.accessibilityAttributedHint = self.accessibilityAttributedHint;
+    accessibilityElement.accessibilityAttributedValue = self.accessibilityAttributedValue;
+  }
+  [accessibilityElement updateFrameWithLayout:layout containerNode:containerNode textNode:self];
+  [accessibilityElements addObject:accessibilityElement];
+
+  // Collect all links as accessiblity items
+  for (NSString *linkAttributeName in _linkAttributeNames) {
+    [_attributedText enumerateAttribute:linkAttributeName inRange:NSMakeRange(0, attributedTextLength) options:NSAttributedStringEnumerationLongestEffectiveRangeNotRequired usingBlock:^(id  _Nullable value, NSRange range, BOOL * _Nonnull stop) {
+      if (value == nil) {
+        return;
+      }
+      ASTextNodeAccessiblityElement *accessibilityElement = [[ASTextNodeAccessiblityElement alloc] initWithAccessibilityContainer:self];
+      accessibilityElement.accessibilityTraits = UIAccessibilityTraitLink;
+      accessibilityElement.accessibilityLabel = [_attributedText.string substringWithRange:range];
+      accessibilityElement.accessibilityRange = range;
+      if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
+        accessibilityElement.accessibilityAttributedLabel = [_attributedText attributedSubstringFromRange:range];
+      }
+      [accessibilityElement updateFrameWithLayout:layout containerNode:containerNode textNode:self];
+      [accessibilityElements addObject:accessibilityElement];
+    }];
+  }
+  return accessibilityElements;
+}
+
+- (BOOL)performAccessibilityCustomActionLink:(UIAccessibilityCustomAction *)action
+{
+  NSCAssert(0 != (action.accessibilityTraits & UIAccessibilityTraitLink), @"Action needs to have UIAccessibilityTraitLink trait set");
+  NSCAssert([action isKindOfClass:[ASAccessibilityCustomAction class]], @"Action needs to be of kind ASAccessibilityCustomAction");
+  ASAccessibilityCustomAction *customAction = (ASAccessibilityCustomAction *)action;
+
+  // In TextNode2 forward the link custom action to textNode:tappedLinkAttribute:value:atPoint:textRange:
+  // the default method that is available for link handling within ASTextNodeDelegate
+  if ([self.delegate respondsToSelector:@selector(textNode:tappedLinkAttribute:value:atPoint:textRange:)]) {
+    // Convert from screen coordinates to the node coordinate space
+    CGPoint centerAccessibilityFrame = CGPointMake(CGRectGetMidX(customAction.accessibilityFrame), CGRectGetMidY(customAction.accessibilityFrame));
+    CGPoint center = [self.supernode convertPoint:centerAccessibilityFrame fromNode:nil];
+    [self.delegate textNode:(ASTextNode *)self tappedLinkAttribute:NSLinkAttributeName value:customAction.value atPoint:center textRange:customAction.textRange];
+    return YES;
+  }
+  return NO;
 }
 
 #pragma mark - Layout and Sizing
@@ -423,14 +560,21 @@ static NSArray *DefaultLinkAttributeNames() {
   self.accessibilityLabel = self.defaultAccessibilityLabel;
   
   // We update the isAccessibilityElement setting if this node is not switching between strings.
-  if (oldAttributedText.length == 0 || length == 0) {
-    // We're an accessibility element by default if there is a string.
-    self.isAccessibilityElement = (length != 0);
+  if (!ASActivateExperimentalFeature(ASExperimentalTextNode2A11YContainer)) {
+    // We update the isAccessibilityElement setting if this node is not switching between strings.
+    if (oldAttributedText.length == 0 || length == 0) {
+      // We're an accessibility element by default if there is a string.
+      self.isAccessibilityElement = (length != 0);
+    }
   }
 
 #if AS_TEXTNODE2_RECORD_ATTRIBUTED_STRINGS
   [ASTextNode _registerAttributedText:_attributedText];
 #endif
+
+  if (self.isNodeLoaded) {
+    [self invalidateAccessibleElementsIfNeeded];
+  }
 }
 
 #pragma mark - Text Layout
@@ -475,6 +619,7 @@ static NSArray *DefaultLinkAttributeNames() {
                                      && isForIntrinsicSize
                                      && style.alignment != NSTextAlignmentLeft
                                      && style.alignment != NSTextAlignmentJustified);
+    const BOOL useNaturalAlignment = (!style || style.alignment == NSTextAlignmentNatural);
     if (style != nil) {
       if (innerMode == style.lineBreakMode) {
         applyTruncationMode = NO;
@@ -486,7 +631,7 @@ static NSArray *DefaultLinkAttributeNames() {
       }
       paragraphStyle = [NSMutableParagraphStyle new];
     }
-    if (!applyTruncationMode && !forceLeftAlignment) {
+    if (!applyTruncationMode && !forceLeftAlignment && !useNaturalAlignment) {
       return;
     }
     paragraphStyle.lineBreakMode = innerMode;
@@ -496,6 +641,31 @@ static NSArray *DefaultLinkAttributeNames() {
     }
     if (forceLeftAlignment) {
       paragraphStyle.alignment = NSTextAlignmentLeft;
+    } else if (useNaturalAlignment) {
+      if (AS_AVAILABLE_IOS(10)) {
+        switch (self.primitiveTraitCollection.layoutDirection) {
+          case UITraitEnvironmentLayoutDirectionLeftToRight:
+            paragraphStyle.alignment = NSTextAlignmentLeft;
+            break;
+          case UITraitEnvironmentLayoutDirectionRightToLeft:
+            paragraphStyle.alignment = NSTextAlignmentRight;
+            break;
+          case UITraitEnvironmentLayoutDirectionUnspecified:
+            break;
+        }
+      } else {
+        NSNumber *layoutDirection = ASApplicationUserInterfaceLayoutDirection();
+        if (layoutDirection) {
+          switch (static_cast<UIUserInterfaceLayoutDirection>([layoutDirection integerValue])) {
+            case UIUserInterfaceLayoutDirectionLeftToRight:
+              paragraphStyle.alignment = NSTextAlignmentLeft;
+              break;
+            case UIUserInterfaceLayoutDirectionRightToLeft:
+              paragraphStyle.alignment = NSTextAlignmentRight;
+              break;
+          }
+        }
+      }
     }
     [attributedString addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:range];
   }];
@@ -1199,16 +1369,6 @@ static CGRect ASTextNodeAdjustRenderRectForShadowPadding(CGRect rendererRect, UI
 
 #pragma mark - Truncation Message
 
-static NSAttributedString *DefaultTruncationAttributedString()
-{
-  static NSAttributedString *defaultTruncationAttributedString;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    defaultTruncationAttributedString = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"\u2026", @"Default truncation string")];
-  });
-  return defaultTruncationAttributedString;
-}
-
 - (void)_ensureTruncationText
 {
   ASLockScopeSelf();
@@ -1275,18 +1435,28 @@ static NSAttributedString *DefaultTruncationAttributedString()
 
 - (BOOL)isTruncated
 {
-  return ASLockedSelf([self locked_textLayoutForSize:[self _locked_threadSafeBounds].size].truncatedLine != nil);
+  AS::MutexLocker l(__instanceLock__);
+  ASTextLayout *layout = [self locked_textLayoutForSize:[self _locked_threadSafeBounds].size];
+  return !NSEqualRanges(layout.visibleRange, layout.range);
 }
 
 - (BOOL)shouldTruncateForConstrainedSize:(ASSizeRange)constrainedSize
 {
-  return ASLockedSelf([self locked_textLayoutForSize:constrainedSize.max].truncatedLine != nil);
+  AS::MutexLocker l(__instanceLock__);
+  ASTextLayout *layout = [self locked_textLayoutForSize:constrainedSize.max];
+  return !NSEqualRanges(layout.visibleRange, layout.range);
 }
 
 - (ASTextLayout *)locked_textLayoutForSize:(CGSize)size
 {
-  ASTextContainer *container = [_textContainer copy];
-  container.size = size;
+  ASTextContainer *container;
+  if (!CGSizeEqualToSize(_textContainer.size, size)) {
+    container = [_textContainer copy];
+    container.size = size;
+    [container makeImmutable];
+  } else {
+    container = _textContainer;
+  }
   return ASTextNodeCompatibleLayoutWithContainerAndText(container, _attributedText);
 }
 
@@ -1355,48 +1525,18 @@ static NSAttributedString *DefaultTruncationAttributedString()
 - (NSAttributedString *)_locked_composedTruncationText
 {
   DISABLED_ASAssertLocked(__instanceLock__);
-  if (_composedTruncationText == nil) {
-    if (_truncationAttributedText != nil && _additionalTruncationMessage != nil) {
-      NSMutableAttributedString *newComposedTruncationString = [[NSMutableAttributedString alloc] initWithAttributedString:_truncationAttributedText];
-      [newComposedTruncationString.mutableString appendString:@" "];
-      [newComposedTruncationString appendAttributedString:_additionalTruncationMessage];
-      _composedTruncationText = newComposedTruncationString;
-    } else if (_truncationAttributedText != nil) {
-      _composedTruncationText = _truncationAttributedText;
-    } else if (_additionalTruncationMessage != nil) {
-      _composedTruncationText = _additionalTruncationMessage;
-    } else {
-      _composedTruncationText = DefaultTruncationAttributedString();
-    }
-    _composedTruncationText = [self _locked_prepareTruncationStringForDrawing:_composedTruncationText];
+  NSAttributedString *composedTruncationText = nil;
+  if (_truncationAttributedText != nil && _additionalTruncationMessage != nil) {
+    NSMutableAttributedString *newComposedTruncationString = [[NSMutableAttributedString alloc] initWithAttributedString:_truncationAttributedText];
+    [newComposedTruncationString.mutableString appendString:@" "];
+    [newComposedTruncationString appendAttributedString:_additionalTruncationMessage];
+    composedTruncationText = newComposedTruncationString;
+  } else if (_truncationAttributedText != nil) {
+    composedTruncationText = _truncationAttributedText;
+  } else if (_additionalTruncationMessage != nil) {
+    composedTruncationText = _additionalTruncationMessage;
   }
-  return _composedTruncationText;
-}
-
-/**
- * - cleanses it of core text attributes so TextKit doesn't crash
- * - Adds whole-string attributes so the truncation message matches the styling
- * of the body text
- */
-- (NSAttributedString *)_locked_prepareTruncationStringForDrawing:(NSAttributedString *)truncationString
-{
-  DISABLED_ASAssertLocked(__instanceLock__);
-  NSMutableAttributedString *truncationMutableString = [truncationString mutableCopy];
-  // Grab the attributes from the full string
-  if (_attributedText.length > 0) {
-    NSAttributedString *originalString = _attributedText;
-    NSInteger originalStringLength = _attributedText.length;
-    // Add any of the original string's attributes to the truncation string,
-    // but don't overwrite any of the truncation string's attributes
-    NSDictionary *originalStringAttributes = [originalString attributesAtIndex:originalStringLength-1 effectiveRange:NULL];
-    [truncationString enumerateAttributesInRange:NSMakeRange(0, truncationString.length) options:0 usingBlock:
-     ^(NSDictionary *attributes, NSRange range, BOOL *stop) {
-       NSMutableDictionary *futureTruncationAttributes = [originalStringAttributes mutableCopy];
-       [futureTruncationAttributes addEntriesFromDictionary:attributes];
-       [truncationMutableString setAttributes:futureTruncationAttributes range:range];
-     }];
-  }
-  return truncationMutableString;
+  return composedTruncationText;
 }
 
 #if AS_TEXTNODE2_RECORD_ATTRIBUTED_STRINGS

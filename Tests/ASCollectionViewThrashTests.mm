@@ -59,14 +59,14 @@
 
 #pragma mark Test Methods
 
-- (void)testInitialDataRead
+- (void)disabled_testInitialDataRead
 {
   ASThrashDataSource *ds = [[ASThrashDataSource alloc] initCollectionViewDataSourceWithData:[ASThrashTestSection sectionsWithCount:kInitialSectionCount]];
   [self verifyDataSource:ds];
 }
 
 /// Replays the Base64 representation of an ASThrashUpdate from "ASThrashTestRecordedCase" file
-- (void)testRecordedThrashCase
+- (void)disabled_testRecordedThrashCase
 {
   NSURL *caseURL = [[NSBundle bundleForClass:[self class]] URLForResource:@"ASThrashTestRecordedCase" withExtension:nil subdirectory:@"TestResources"];
   NSString *base64 = [NSString stringWithContentsOfURL:caseURL encoding:NSUTF8StringEncoding error:NULL];
@@ -84,7 +84,7 @@
   [self verifyDataSource:ds];
 }
 
-- (void)testThrashingWildly
+- (void)disabled_testThrashingWildly
 {
   for (NSInteger i = 0; i < kThrashingIterationCount; i++) {
     [self setUp];
@@ -106,7 +106,7 @@
   }
 }
 
-- (void)testThrashingWildlyOnSameCollectionView
+- (void)disabled_testThrashingWildlyOnSameCollectionView
 {
   XCTestExpectation *expectation = [self expectationWithDescription:@"last test ran"];
   ASThrashDataSource *ds = [[ASThrashDataSource alloc] initCollectionViewDataSourceWithData:nil];
@@ -133,7 +133,7 @@
   [self waitForExpectationsWithTimeout:3 handler:nil];
 }
 
-- (void)testThrashingWildlyDispatchWildly
+- (void)disabled_testThrashingWildlyDispatchWildly
 {
   XCTestExpectation *expectation = [self expectationWithDescription:@"last test ran"];
   for (NSInteger i = 0; i < kThrashingIterationCount; i++) {

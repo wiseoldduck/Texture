@@ -492,4 +492,8 @@ dispatch_once_t _ASSharedCATransactionQueueOnceToken;
   return ASActivateExperimentalFeature(ASExperimentalInterfaceStateCoalescing);
 }
 
++ (ASCATransactionQueue *)sharedQueue
+{
+  return ASCATransactionQueueGet();
+}
 @end

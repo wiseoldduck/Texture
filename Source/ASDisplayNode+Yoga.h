@@ -37,21 +37,22 @@ AS_EXTERN void ASDisplayNodePerformBlockOnEveryYogaChild(ASDisplayNode * _Nullab
 
 @end
 
+#ifdef __cplusplus
 @interface ASDisplayNode (YogaLocking)
 /**
- * @discussion Attempts(spinning) to lock all node up to root node when yoga is enabled.
+ * @discussion Attempts (yielding on failure) to lock all nodes up to root node when yoga is enabled.
  * This will lock self when yoga is not enabled;
  */
-- (ASLockSet)lockToRootIfNeededForLayout;
+- (AS::LockSet)lockToRootIfNeededForLayout;
 
 @end
-
+#endif
 
 // These methods are intended to be used internally to Texture, and should not be called directly.
 @interface ASDisplayNode (YogaInternal)
 
 /// For internal usage only
-- (BOOL)shouldHaveYogaMeasureFunc;
+- (BOOL)_locked_shouldHaveYogaMeasureFunc;
 /// For internal usage only
 - (ASLayout *)calculateLayoutYoga:(ASSizeRange)constrainedSize;
 /// For internal usage only
@@ -97,7 +98,7 @@ NS_ASSUME_NONNULL_END
 
 // When Yoga is enabled, there are several points where we want to lock the tree to the root but otherwise (without Yoga)
 // will want to simply lock self.
-#define ASScopedLockSelfOrToRoot() ASScopedLockSet lockSet = [self lockToRootIfNeededForLayout]
+#define ASScopedLockSelfOrToRoot() AS::LockSet locks = [self lockToRootIfNeededForLayout]
 #else
 #define ASScopedLockSelfOrToRoot() ASLockScopeSelf()
 #endif

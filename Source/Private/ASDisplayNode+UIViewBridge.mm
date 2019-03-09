@@ -8,13 +8,13 @@
 //
 
 #import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
+#import <AsyncDisplayKit/ASDisplayNode+Subclasses.h>
+#import <AsyncDisplayKit/ASDisplayNode+Yoga2.h>
+#import <AsyncDisplayKit/ASDisplayNodeInternal.h>
+#import <AsyncDisplayKit/ASInternalHelpers.h>
+#import <AsyncDisplayKit/ASPendingStateController.h>
 #import <AsyncDisplayKit/_ASCoreAnimationExtras.h>
 #import <AsyncDisplayKit/_ASPendingState.h>
-#import <AsyncDisplayKit/ASInternalHelpers.h>
-#import <AsyncDisplayKit/ASDisplayNodeInternal.h>
-#import <AsyncDisplayKit/ASDisplayNode+Subclasses.h>
-#import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
-#import <AsyncDisplayKit/ASPendingStateController.h>
 
 /**
  * The following macros are conveniences to help in the common tasks related to the bridging that ASDisplayNode does to UIView and CALayer.
@@ -77,6 +77,8 @@ if (shouldApply) { _view.viewAndPendingViewStateProperty = (viewAndPendingViewSt
 
 #define _setToLayer(layerProperty, layerValueExpr) BOOL shouldApply = ASDisplayNodeShouldApplyBridgedWriteToView(self); \
 if (shouldApply) { _layer.layerProperty = (layerValueExpr); } else { ASDisplayNodeGetPendingState(self).layerProperty = (layerValueExpr); }
+
+using namespace AS;
 
 /**
  * This category implements certain frequently-used properties and methods of UIView and CALayer so that ASDisplayNode clients can just call the view/layer methods on the node,
@@ -208,9 +210,7 @@ if (shouldApply) { _layer.layerProperty = (layerValueExpr); } else { ASDisplayNo
 
 - (void)setCornerRadius:(CGFloat)newCornerRadius
 {
-  [self updateCornerRoundingWithType:self.cornerRoundingType
-                        cornerRadius:newCornerRadius
-                       maskedCorners:self.maskedCorners];
+  [self updateCornerRoundingWithType:self.cornerRoundingType cornerRadius:newCornerRadius];
 }
 
 - (ASCornerRoundingType)cornerRoundingType
@@ -221,20 +221,7 @@ if (shouldApply) { _layer.layerProperty = (layerValueExpr); } else { ASDisplayNo
 
 - (void)setCornerRoundingType:(ASCornerRoundingType)newRoundingType
 {
-  [self updateCornerRoundingWithType:newRoundingType cornerRadius:self.cornerRadius maskedCorners:self.maskedCorners];
-}
-
-- (CACornerMask)maskedCorners
-{
-  AS::MutexLocker l(__instanceLock__);
-  return _maskedCorners;
-}
-
-- (void)setMaskedCorners:(CACornerMask)newMaskedCorners
-{
-  [self updateCornerRoundingWithType:self.cornerRoundingType
-                        cornerRadius:self.cornerRadius
-                       maskedCorners:newMaskedCorners];
+  [self updateCornerRoundingWithType:newRoundingType cornerRadius:self.cornerRadius];
 }
 
 - (NSString *)contentsGravity
@@ -330,77 +317,70 @@ if (shouldApply) { _layer.layerProperty = (layerValueExpr); } else { ASDisplayNo
 
 - (void)setFrame:(CGRect)rect
 {
-  BOOL setToView = NO;
-  BOOL setToLayer = NO;
-  CGRect newBounds = CGRectZero;
-  CGPoint newPosition = CGPointZero;
-  BOOL nodeLoaded = NO;
+  _bridge_prologue_write;
+
+  // For classes like ASTableNode, ASCollectionNode, ASScrollNode and similar - make sure UIView gets setFrame:
+  struct ASDisplayNodeFlags flags = _flags;
+  BOOL specialPropertiesHandling = ASDisplayNodeNeedsSpecialPropertiesHandling(checkFlag(Synchronous), flags.layerBacked);
+
+  BOOL nodeLoaded = _loaded(self);
   BOOL isMainThread = ASDisplayNodeThreadIsMain();
-  {
-    _bridge_prologue_write;
+  if (!specialPropertiesHandling) {
+    BOOL canReadProperties = isMainThread || !nodeLoaded;
+    if (canReadProperties) {
+      // We don't have to set frame directly, and we can read current properties.
+      // Compute a new bounds and position and set them on self.
+      CALayer *layer = _layer;
+      BOOL useLayer = (layer != nil);
+      CGPoint origin = (useLayer ? layer.bounds.origin : self.bounds.origin);
+      CGPoint anchorPoint = (useLayer ? layer.anchorPoint : self.anchorPoint);
 
-    // For classes like ASTableNode, ASCollectionNode, ASScrollNode and similar - make sure UIView gets setFrame:
-    struct ASDisplayNodeFlags flags = _flags;
-    BOOL specialPropertiesHandling = ASDisplayNodeNeedsSpecialPropertiesHandling(checkFlag(Synchronous), flags.layerBacked);
+      CGRect newBounds = CGRectZero;
+      CGPoint newPosition = CGPointZero;
+      ASBoundsAndPositionForFrame(rect, origin, anchorPoint, &newBounds, &newPosition);
 
-    nodeLoaded = _loaded(self);
-    if (!specialPropertiesHandling) {
-      BOOL canReadProperties = isMainThread || !nodeLoaded;
-      if (canReadProperties) {
-        // We don't have to set frame directly, and we can read current properties.
-        // Compute a new bounds and position and set them on self.
-        CALayer *layer = _layer;
-        CGPoint origin = (nodeLoaded ? layer.bounds.origin : self.bounds.origin);
-        CGPoint anchorPoint = (nodeLoaded ? layer.anchorPoint : self.anchorPoint);
-
-        ASBoundsAndPositionForFrame(rect, origin, anchorPoint, &newBounds, &newPosition);
-
-        if (ASIsCGRectValidForLayout(newBounds) == NO || ASIsCGPositionValidForLayout(newPosition) == NO) {
-          ASDisplayNodeAssertNonFatal(NO, @"-[ASDisplayNode setFrame:] - The new frame (%@) is invalid and unsafe to be set.", NSStringFromCGRect(rect));
-          return;
-        }
-
-        if (nodeLoaded) {
-          setToLayer = YES;
-        } else {
-          self.bounds = newBounds;
-          self.position = newPosition;
-        }
+      if (ASIsCGRectValidForLayout(newBounds) == NO || ASIsCGPositionValidForLayout(newPosition) == NO) {
+        ASDisplayNodeAssertNonFatal(NO, @"-[ASDisplayNode setFrame:] - The new frame (%@) is invalid and unsafe to be set.", NSStringFromCGRect(rect));
+        return;
+      }
+      
+      if (useLayer) {
+        layer.bounds = newBounds;
+        layer.position = newPosition;
       } else {
-        // We don't have to set frame directly, but we can't read properties.
-        // Store the frame in our pending state, and it'll get decomposed into
-        // bounds and position when the pending state is applied.
-        _ASPendingState *pendingState = ASDisplayNodeGetPendingState(self);
-        if (nodeLoaded && !pendingState.hasChanges) {
-          [[ASPendingStateController sharedInstance] registerNode:self];
-        }
-        pendingState.frame = rect;
+        self.bounds = newBounds;
+        self.position = newPosition;
       }
     } else {
-      if (nodeLoaded && isMainThread) {
-        // We do have to set frame directly, and we're on main thread with a loaded node.
-        // Just set the frame on the view.
-        // NOTE: Frame is only defined when transform is identity because we explicitly diverge from CALayer behavior and define frame without transform.
-        setToView = YES;
-      } else {
-        // We do have to set frame directly, but either the node isn't loaded or we're on a non-main thread.
-        // Set the frame on the pending state, and it'll call setFrame: when applied.
-        _ASPendingState *pendingState = ASDisplayNodeGetPendingState(self);
-        if (nodeLoaded && !pendingState.hasChanges) {
-          [[ASPendingStateController sharedInstance] registerNode:self];
-        }
-        pendingState.frame = rect;
+      // We don't have to set frame directly, but we can't read properties.
+      // Store the frame in our pending state, and it'll get decomposed into
+      // bounds and position when the pending state is applied.
+      _ASPendingState *pendingState = ASDisplayNodeGetPendingState(self);
+      if (nodeLoaded && !pendingState.hasChanges) {
+        [[ASPendingStateController sharedInstance] registerNode:self];
       }
+      pendingState.frame = rect;
     }
-  }
-
-  if (setToView) {
-    ASDisplayNodeAssertTrue(nodeLoaded && isMainThread);
-    _view.frame = rect;
-  } else if (setToLayer) {
-    ASDisplayNodeAssertTrue(nodeLoaded && isMainThread);
-    _layer.bounds = newBounds;
-    _layer.position = newPosition;
+  } else {
+    if (nodeLoaded && isMainThread) {
+      // We do have to set frame directly, and we're on main thread with a loaded node.
+      // Just set the frame on the view.
+      // NOTE: Frame is only defined when transform is identity because we explicitly diverge from CALayer behavior and define frame without transform.
+//#if DEBUG
+//      // Checking if the transform is identity is expensive, so disable when unnecessary. We have assertions on in Release, so DEBUG is the only way I know of.
+//      ASDisplayNodeAssert(CATransform3DIsIdentity(self.transform), @"-[ASDisplayNode setFrame:] - self.transform must be identity in order to set the frame property.  (From Apple's UIView documentation: If the transform property is not the identity transform, the value of this property is undefined and therefore should be ignored.)");
+//#endif
+      _view.bounds = CGRectMake(_view.bounds.origin.x, _view.bounds.origin.y, rect.size.width, rect.size.height);
+      _view.center = CGPointMake(CGRectGetMidX(rect), CGRectGetMidY(rect));
+    } else {
+      // We do have to set frame directly, but either the node isn't loaded or we're on a non-main thread.
+      // Set the frame on the pending state, and it'll call setFrame: when applied.
+      _ASPendingState *pendingState = ASDisplayNodeGetPendingState(self);
+      if (nodeLoaded && !pendingState.hasChanges) {
+        [[ASPendingStateController sharedInstance] registerNode:self];
+      }
+      pendingState.frame = rect;
+    }
   }
 }
 
@@ -497,7 +477,17 @@ if (shouldApply) { _layer.layerProperty = (layerValueExpr); } else { ASDisplayNo
       [ASDisplayNodeGetPendingState(self) layoutIfNeeded];
     }
   }
-  
+
+  UniqueLock l(__instanceLock__);
+  if (Yoga2::GetEnabled(self)) {
+    if (shouldApply || !loaded) {
+      l.unlock();
+      Yoga2::HandleExplicitLayoutIfNeeded(self);
+    }
+    return;
+  }
+  l.unlock();
+
   if (shouldApply) {
     // The node is loaded and we're on main.
     // Message the view or layer which in turn will call __layout on us (see -[_ASDisplayLayer layoutSublayers]).
@@ -1025,27 +1015,6 @@ if (shouldApply) { _layer.layerProperty = (layerValueExpr); } else { ASDisplayNo
   _setToLayer(cornerRadius, newLayerCornerRadius);
 }
 
-- (CACornerMask)layerMaskedCorners
-{
-  _bridge_prologue_read;
-  if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
-    return _getFromLayer(maskedCorners);
-  } else {
-    return kASCACornerAllCorners;
-  }
-}
-
-- (void)setLayerMaskedCorners:(CACornerMask)newLayerMaskedCorners
-{
-  _bridge_prologue_write;
-  if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
-    _setToLayer(maskedCorners, newLayerMaskedCorners);
-  } else {
-    ASDisplayNodeAssert(newLayerMaskedCorners == kASCACornerAllCorners,
-                        @"Cannot change maskedCorners property in iOS < 11 while using DefaultSlowCALayer rounding.");
-  }
-}
-
 - (BOOL)_locked_insetsLayoutMarginsFromSafeArea
 {
   DISABLED_ASAssertLocked(__instanceLock__);
@@ -1314,6 +1283,18 @@ nodeProperty = nodeValueExpr; _setToViewOnly(viewAndPendingViewStateProperty, vi
 }
 #endif
 
+- (void)setAccessibilityElements:(NSArray *)accessibilityElements
+{
+  _bridge_prologue_write;
+  _setToViewOnly(accessibilityElements, accessibilityElements);
+}
+
+- (NSArray *)accessibilityHeaderElements
+{
+  _bridge_prologue_read;
+  return _getFromViewOnly(accessibilityElements);
+}
+
 - (void)setAccessibilityActivationPoint:(CGPoint)accessibilityActivationPoint
 {
   _bridge_prologue_write;
@@ -1336,12 +1317,6 @@ nodeProperty = nodeValueExpr; _setToViewOnly(viewAndPendingViewStateProperty, vi
 {
   _bridge_prologue_read;
   return _getAccessibilityFromViewOrProperty(_accessibilityPath, accessibilityPath);
-}
-
-- (NSInteger)accessibilityElementCount
-{
-  _bridge_prologue_read;
-  return _getFromViewOnly(accessibilityElementCount);
 }
 
 @end

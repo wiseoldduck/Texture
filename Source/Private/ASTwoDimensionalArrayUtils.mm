@@ -64,6 +64,16 @@ void ASDeleteElementsInTwoDimensionalArrayAtIndexPaths(NSMutableArray *mutableAr
   }
 }
 
+void ASDeleteElementInTwoDimensionalArrayAtIndexPath(NSMutableArray *mutableArray, NSIndexPath *indexPath)
+{
+  const NSInteger section = indexPath.section;
+  AS_C_PRECONDITION(section < mutableArray.count, (void)0, @"Section out of bounds.");
+  unowned NSMutableArray *subarray = mutableArray[section];
+  const NSInteger item = indexPath.item;
+  AS_C_PRECONDITION(item < subarray.count, (void)0, @"Item out of bounds.");
+  [subarray removeObjectAtIndex:item];
+}
+
 NSArray<NSIndexPath *> *ASIndexPathsForTwoDimensionalArray(NSArray <NSArray *>* twoDimensionalArray)
 {
   NSInteger sectionCount = twoDimensionalArray.count;

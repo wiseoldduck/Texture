@@ -937,9 +937,9 @@ static NSString * const kCellReuseIdentifier = @"_ASTableViewCell";
   if (element != nil) {
     ASCellNode *node = element.node;
     ASDisplayNodeAssertNotNil(node, @"Node must not be nil!");
-    height = [node layoutThatFits:element.constrainedSize].size.height;
+    height = [node measure:element.constrainedSize].height;
   }
-  
+
 #if TARGET_OS_IOS
   /**
    * Weirdly enough, Apple expects the return value here to _include_ the height
@@ -1719,11 +1719,6 @@ static NSString * const kCellReuseIdentifier = @"_ASTableViewCell";
     return YES;
   }
   return NO;
-}
-
-- (void)dataControllerDidFinishWaiting:(ASDataController *)dataController
-{
-  // ASCellLayoutMode is not currently supported on ASTableView (see ASCollectionView for details).
 }
 
 - (id)dataController:(ASDataController *)dataController nodeModelForItemAtIndexPath:(NSIndexPath *)indexPath

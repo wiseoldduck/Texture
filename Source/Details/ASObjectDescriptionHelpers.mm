@@ -27,6 +27,8 @@ NSString *ASGetDescriptionValueString(id object)
       return NSStringFromCGSize(value.CGSizeValue);
     } else if (strcmp(type, @encode(CGPoint)) == 0) {
       return NSStringFromCGPoint(value.CGPointValue);
+    } else if (strcmp(type, @encode(UIEdgeInsets)) == 0) {
+      return NSStringFromUIEdgeInsets(value.UIEdgeInsetsValue);
     }
     
   } else if ([object isKindOfClass:[NSIndexSet class]]) {

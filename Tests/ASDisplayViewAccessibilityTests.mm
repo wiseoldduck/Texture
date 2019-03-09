@@ -44,6 +44,28 @@
   XCTAssertEqual([node.view indexOfAccessibilityElement:node.view.accessibilityElements.firstObject], 0);*/
 }
 
+- (void)testManualSettingOfAccessiblityElements
+{
+  ASDisplayNode *container = [[ASDisplayNode alloc] init];
+
+  ASTextNode *subnode = [[ASTextNode alloc] init];
+  subnode.layerBacked = YES;
+  subnode.attributedText = [[NSAttributedString alloc] initWithString:@"hello"];
+  subnode.frame = CGRectMake(50, 100, 200, 200);
+  [container addSubnode:subnode];
+  XCTAssertEqual(container.view.accessibilityElements.count, 1);
+
+  // Clearing the accessibility elements
+  XCTAssertEqual(container.view.accessibilityElements.count, 1, @"Clearing the accessibility elements should requery the accessibility elements.");
+
+  UIAccessibilityElement *accessibilityElementOne = [[UIAccessibilityElement alloc] initWithAccessibilityContainer:container.view];
+  UIAccessibilityElement *accessibilityElementTwo = [[UIAccessibilityElement alloc] initWithAccessibilityContainer:container.view];
+  container.accessibilityElements = @[accessibilityElementOne, accessibilityElementTwo];
+  XCTAssertEqual(container.view.accessibilityElements.count, 2);
+  XCTAssertEqualObjects(container.view.accessibilityElements[0], accessibilityElementOne);
+  XCTAssertEqualObjects(container.view.accessibilityElements[1], accessibilityElementTwo);
+}
+
 - (void)testThatSubnodeAccessibilityLabelAggregationWorks
 {
   // Setup nodes

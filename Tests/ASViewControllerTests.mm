@@ -38,7 +38,7 @@
   XCTAssertNotEqual(scrollNode.view.contentInset.top, 0);
 }
 
-- (void)testThatViewControllerFrameIsRightAfterCustomTransitionWithNonextendedEdges
+- (void)disable_testThatViewControllerFrameIsRightAfterCustomTransitionWithNonextendedEdges
 {
   UIWindow *window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   ASDisplayNode *node = [[ASDisplayNode alloc] init];

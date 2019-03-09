@@ -28,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 #define AS_MAX_INTERFACE_STATE_DELEGATES 4
 #endif
 
-@class ASDisplayNode;
+@class ASDisplayNode, ASNodeContext;
 @protocol ASContextTransitioning;
 
 /**
@@ -190,6 +190,11 @@ AS_EXTERN NSInteger const ASDefaultDrawingPriority;
  * @note You will usually NOT call this. See the limitations documented in @c initWithLayerBlock:
  */
 - (void)setLayerBlock:(ASDisplayNodeLayerBlock)layerBlock;
+
+/**
+ * Get the context for this node, if one was set during creation.
+ */
+@property (nullable, readonly) ASNodeContext *nodeContext;
 
 /** 
  * @abstract Returns whether the node is synchronous.
@@ -362,6 +367,14 @@ AS_EXTERN NSInteger const ASDefaultDrawingPriority;
  * @discussion The node's view will be automatically removed from the supernode's view.
  */
 - (void)removeFromSupernode;
+
+/**
+ * @abstract Move the given subnode to a new index.
+ *
+ * @discussion This avoids extra traffic that would be involved with removing the subnode and
+ * inserting it as separate operations.
+ */
+- (void)moveSubnode:(ASDisplayNode *)node toIndex:(NSInteger)newIndex;
 
 /** 
  * @abstract The receiver's immediate subnodes.
@@ -666,14 +679,6 @@ AS_EXTERN NSInteger const ASDefaultDrawingPriority;
  */
 @property           CGFloat cornerRadius;                     // default=0.0
 
-/** @abstract Which corners to mask when rounding corners.
- *
- * @note This option cannot be changed when using iOS < 11
- * and using ASCornerRoundingTypeDefaultSlowCALayer. Use a different corner rounding type to implement not-all-corners
- * rounding in prior versions of iOS.
- */
-@property           CACornerMask maskedCorners;               // default=all corners.
-
 @property           BOOL clipsToBounds;                       // default==NO
 @property (getter=isHidden)  BOOL hidden;                     // default==NO
 @property (getter=isOpaque)  BOOL opaque;                     // default==YES
@@ -782,6 +787,13 @@ AS_EXTERN NSInteger const ASDefaultDrawingPriority;
 
 @end
 
+/**
+ * "AS_FORCE_ACCESSIBILITY_FOR_TESTING" is A command line argument that, if present, forces Texture
+ * to process accessibility regardless of whether voice over is currently running.
+ *
+ * This is useful for test environments that run in release mode.
+ */
+
 @interface ASDisplayNode (UIViewBridgeAccessibility)
 
 // Accessibility support
@@ -818,15 +830,21 @@ AS_EXTERN NSInteger const ASDefaultDrawingPriority;
  *
  * @param constrainedSize The minimum and maximum sizes the receiver should fit in.
  *
- * @return An ASLayout instance defining the layout of the receiver (and its children, if the box layout model is used).
+ * @return An ASLayout instance defining the layout of the receiver (and its children, if the box
+ * layout model is used).
  *
- * @discussion Though this method does not set the bounds of the view, it does have side effects--caching both the
- * constraint and the result.
+ * @discussion Though this method does not set the bounds of the view, it does have side
+ * effects--caching both the constraint and the result.
  *
- * @warning Subclasses must not override this; it caches results from -calculateLayoutThatFits:.  Calling this method may
- * be expensive if result is not cached.
+ * @warning Subclasses must not override this; it caches results from -calculateLayoutThatFits:.
+ * Calling this method may be expensive if result is not cached.
  *
  * @see [ASDisplayNode(Subclassing) calculateLayoutThatFits:]
+ *
+ * @note In the yoga2 experiment, this method may only be called on yoga root nodes. You can however
+ * call this on the root node, and then call -calculatedLayout on the intermediary node of interest.
+ * Note also that in yoga2, the minimum size specified here is ignored – you can manipulate
+ * style.minWidth and style.minHeight to force a minimum size.
  */
 - (ASLayout *)layoutThatFits:(ASSizeRange)constrainedSize;
 

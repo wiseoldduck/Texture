@@ -29,7 +29,11 @@ static ASExperimentalFeatures features[] = {
   ASExperimentalDispatchApply,
   ASExperimentalOOMBackgroundDeallocDisable,
   ASExperimentalRemoveTextKitInitialisingLock,
-  ASExperimentalDrawingGlobal
+  ASExperimentalDrawingGlobal,
+  ASExperimentalReloadDataFlagHandling,
+  ASExperimentalCellNodeCache,
+  ASExperimentalTextNode2A11YContainer,
+  ASExperimentalDeferredNodeRelease
 };
 
 @interface ASConfigurationTests : ASTestCase <ASConfigurationDelegate>
@@ -53,7 +57,11 @@ static ASExperimentalFeatures features[] = {
     @"exp_dispatch_apply",
     @"exp_oom_bg_dealloc_disable",
     @"exp_remove_textkit_initialising_lock",
-    @"exp_drawing_global"
+    @"exp_drawing_global",
+    @"exp_reload_data_flag",
+    @"exp_cell_node_cache",
+    @"exp_text_node_2_a11y_container",
+    @"exp_deferred_node_release"
   ];
 }
 

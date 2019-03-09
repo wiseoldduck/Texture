@@ -9,19 +9,21 @@
 
 #import <AsyncDisplayKit/ASAvailability.h>
 #import <AsyncDisplayKit/ASCollections.h>
-#import <AsyncDisplayKit/ASDisplayNodeExtras.h>
-#import <AsyncDisplayKit/ASDisplayNodeInternal.h>
 #import <AsyncDisplayKit/ASDisplayNode+FrameworkPrivate.h>
 #import <AsyncDisplayKit/ASDisplayNode+Subclasses.h>
+#import <AsyncDisplayKit/ASDisplayNode+Yoga.h>
+#import <AsyncDisplayKit/ASDisplayNode+Yoga2.h>
+#import <AsyncDisplayKit/ASDisplayNodeExtras.h>
+#import <AsyncDisplayKit/ASDisplayNodeInternal.h>
 #import <AsyncDisplayKit/ASInternalHelpers.h>
 #import <AsyncDisplayKit/ASLayout.h>
 #import <AsyncDisplayKit/ASLayoutElementStylePrivate.h>
 #import <AsyncDisplayKit/ASLog.h>
 #import <AsyncDisplayKit/ASNodeController+Beta.h>
-#import <AsyncDisplayKit/ASDisplayNode+Yoga.h>
+#import <AsyncDisplayKit/ASSignpost.h>
 #import <AsyncDisplayKit/NSArray+Diffing.h>
 
-using AS::MutexLocker;
+using namespace AS;
 
 @interface ASDisplayNode (ASLayoutElementStyleDelegate) <ASLayoutElementStyleDelegate>
 @end
@@ -31,7 +33,11 @@ using AS::MutexLocker;
 #pragma mark <ASLayoutElementStyleDelegate>
 
 - (void)style:(ASLayoutElementStyle *)style propertyDidChange:(NSString *)propertyName {
-  [self setNeedsLayout];
+  // In Yoga2 we do not use this pathway. We rely on yoga's internal dirty propagation.
+  MutexLocker l(__instanceLock__);
+  if (!Yoga2::GetEnabled(self)) {
+    [self setNeedsLayout];
+  }
 }
 
 @end
@@ -62,7 +68,9 @@ using AS::MutexLocker;
   DISABLED_ASAssertLocked(__instanceLock__);
   if (_style == nil) {
 #if YOGA
-    // In Yoga mode we use the delegate to inform the tree if properties changes
+    // In Yoga1 we use the delegate to inform the tree if properties changes.
+    // In Yoga2 we only use the delegate as a backdoor to get the display node so we can associate
+    // the two immediately after the yoga node is created.
     _style = [[ASLayoutElementStyle alloc] initWithDelegate:self];
 #else
     _style = [[ASLayoutElementStyle alloc] init];
@@ -83,8 +91,28 @@ using AS::MutexLocker;
 
 #pragma mark Measurement Pass
 
+- (CGSize)measure:(ASSizeRange)sizeRange {
+  ASSignpostStart(Measure, self, "%@ main: %d width: %d", ASObjectDescriptionMakeTiny(self),
+                  ASDisplayNodeThreadIsMain(), (int)sizeRange.max.width);
+  CGSize result = CGSizeZero;
+  if (Yoga2::GetEnabled(self)) {
+    MutexLocker l(__instanceLock__);
+    Yoga2::CalculateLayoutAtRoot(self, sizeRange);
+    result = Yoga2::GetCalculatedSize(self);
+  } else {
+    result = [self layoutThatFits:sizeRange].size;
+  }
+  ASSignpostEnd(Measure, self, "height: %d", (int)result.height);
+  return result;
+}
+
 - (ASLayout *)layoutThatFits:(ASSizeRange)constrainedSize
 {
+  if (Yoga2::GetEnabled(self)) {
+    MutexLocker l(__instanceLock__);
+    Yoga2::CalculateLayoutAtRoot(self, constrainedSize);
+    return Yoga2::GetCalculatedLayout(self);
+  }
   return [self layoutThatFits:constrainedSize parentSize:constrainedSize.max];
 }
 
@@ -188,13 +216,20 @@ ASLayoutElementStyleExtensibilityForwarding
 
 - (ASLayout *)calculatedLayout
 {
-  MutexLocker l(__instanceLock__);
+  if (Yoga2::GetEnabled(self)) {
+    AS::LockSet locks = [self lockToRootIfNeededForLayout];
+    return Yoga2::GetCalculatedLayout(self);
+  }
   return _calculatedDisplayNodeLayout.layout;
 }
 
 - (CGSize)calculatedSize
 {
-  MutexLocker l(__instanceLock__);
+  if (Yoga2::GetEnabled(self)) {
+    AS::LockSet locks = [self lockToRootIfNeededForLayout];
+    return Yoga2::GetCalculatedSize(self);
+  }
+
   if (_pendingDisplayNodeLayout.isValid(_layoutVersion)) {
     return _pendingDisplayNodeLayout.layout.size;
   }
@@ -210,6 +245,7 @@ ASLayoutElementStyleExtensibilityForwarding
 - (ASSizeRange)_locked_constrainedSizeForCalculatedLayout
 {
   DISABLED_ASAssertLocked(__instanceLock__);
+  Yoga2::AssertDisabled(self);
   if (_pendingDisplayNodeLayout.isValid(_layoutVersion)) {
     return _pendingDisplayNodeLayout.constrainedSize;
   }
@@ -244,6 +280,7 @@ ASLayoutElementStyleExtensibilityForwarding
  */
 - (void)_u_setNeedsLayoutFromAbove
 {
+  Yoga2::AssertDisabled(self);
   ASDisplayNodeAssertThreadAffinity(self);
   DISABLED_ASAssertUnlocked(__instanceLock__);
 
@@ -267,13 +304,15 @@ ASLayoutElementStyleExtensibilityForwarding
   }
 }
 
-// TODO It would be easier to work with if we could `ASAssertUnlocked` here, but we
-// cannot due to locking to root in `_u_measureNodeWithBoundsIfNecessary`.
+// TODO(b/119787186) It would be easier to work with if we could `ASAssertUnlocked` here, but we
+// cannot due to locking to root in `_u_measureNodeWithBoundsIfNecessary`. That was added
+// in cl/220150100 to remedy b/117632898.
 - (void)_rootNodeDidInvalidateSize
 {
+  Yoga2::AssertDisabled(self);
   ASDisplayNodeAssertThreadAffinity(self);
   __instanceLock__.lock();
-  
+
   // We are the root node and need to re-flow the layout; at least one child needs a new size.
   CGSize boundsSizeForLayout = ASCeilSizeValues(self.bounds.size);
 
@@ -297,7 +336,7 @@ ASLayoutElementStyleExtensibilityForwarding
   }
 }
 
-// TODO
+// TODO (b/119786111)
 // We should remove this logic, which is relatively new, and instead
 // rely on the parent / host of the root node to do this size change. That's always been the
 // expectation with other node containers like ASTableView, ASCollectionView, ASViewController, etc.
@@ -310,6 +349,7 @@ ASLayoutElementStyleExtensibilityForwarding
 // causing real issues in cases of resizing nodes.
 - (void)displayNodeDidInvalidateSizeNewSize:(CGSize)size
 {
+  Yoga2::AssertDisabled(self);
   ASDisplayNodeAssertThreadAffinity(self);
 
   // The default implementation of display node changes the size of itself to the new size
@@ -334,6 +374,7 @@ ASLayoutElementStyleExtensibilityForwarding
 {
   DISABLED_ASAssertUnlocked(__instanceLock__);
   ASScopedLockSelfOrToRoot();
+  Yoga2::AssertDisabled(self);
 
   // Check if we are a subnode in a layout transition.
   // In this case no measurement is needed as it's part of the layout transition
@@ -482,6 +523,7 @@ ASLayoutElementStyleExtensibilityForwarding
 
 - (ASSizeRange)_locked_constrainedSizeForLayoutPass
 {
+  Yoga2::AssertDisabled(self);
   // TODO: The logic in -_u_setNeedsLayoutFromAbove seems correct and doesn't use this method.
   // logic seems correct.  For what case does -this method need to do the CGSizeEqual checks?
   // IF WE CAN REMOVE BOUNDS CHECKS HERE, THEN WE CAN ALSO REMOVE "REQUESTED FROM ABOVE" CHECK
@@ -547,6 +589,9 @@ ASLayoutElementStyleExtensibilityForwarding
 - (BOOL)automaticallyManagesSubnodes
 {
   MutexLocker l(__instanceLock__);
+  if (Yoga2::GetEnabled(self)) {
+    return YES;
+  }
   return _flags.automaticallyManagesSubnodes;
 }
 
@@ -1079,12 +1124,13 @@ ASLayoutElementStyleExtensibilityForwarding
 
 - (BOOL)locked_shouldLayoutFromYogaRoot {
 #if YOGA
+  Yoga2::AssertDisabled(self);
   YGNodeRef yogaNode = _style.yogaNode;
   BOOL hasYogaParent = (_yogaParent != nil);
   BOOL hasYogaChildren = (_yogaChildren.count > 0);
   BOOL usesYoga = (yogaNode != NULL && (hasYogaParent || hasYogaChildren));
   if (usesYoga) {
-    if ([self shouldHaveYogaMeasureFunc] == NO) {
+    if ([self _locked_shouldHaveYogaMeasureFunc] == NO) {
       return YES;
     } else {
       return NO;

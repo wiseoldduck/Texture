@@ -130,6 +130,22 @@ typedef NSMutableDictionary<NSString *, NSMutableDictionary<NSIndexPath *, ASCol
   }];
 }
 
+- (void)removeContentAddedInChangeSet:(_ASHierarchyChangeSet *)changeSet
+{
+  NSParameterAssert(changeSet.deletedSections.count == 0);
+  NSParameterAssert(changeSet.indexPathsForRemovedItems.empty());
+
+  // Delete inserted items in descending order.
+  auto insertedItems = changeSet.indexPathsForInsertedItems;
+  for (auto it = insertedItems.rbegin(); it != insertedItems.rend(); it++) {
+    ASDeleteElementInTwoDimensionalArrayAtIndexPath(_sectionsOfItems, *it);
+  }
+
+  // Delete inserted sections.
+  [_sections removeObjectsAtIndexes:changeSet.insertedSections];
+  [_sectionsOfItems removeObjectsAtIndexes:changeSet.insertedSections];
+}
+
 #pragma mark - Helpers
 
 + (ASMutableSupplementaryElementDictionary *)deepMutableCopyOfElementsDictionary:(ASSupplementaryElementDictionary *)originalDict

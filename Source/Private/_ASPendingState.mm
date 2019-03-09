@@ -9,16 +9,20 @@
 
 #import <AsyncDisplayKit/_ASPendingState.h>
 
-#import <AsyncDisplayKit/_ASCoreAnimationExtras.h>
-#import <AsyncDisplayKit/_ASAsyncTransactionContainer.h>
 #import <AsyncDisplayKit/ASAssert.h>
-#import <AsyncDisplayKit/ASEqualityHelpers.h>
+#import <AsyncDisplayKit/ASDisplayNode+Yoga2.h>
 #import <AsyncDisplayKit/ASDisplayNodeInternal.h>
+#import <AsyncDisplayKit/ASEqualityHelpers.h>
 #import <AsyncDisplayKit/ASInternalHelpers.h>
+#import <AsyncDisplayKit/_ASAsyncTransactionContainer.h>
+#import <AsyncDisplayKit/_ASCoreAnimationExtras.h>
+#import <AsyncDisplayKit/_ASDisplayView.h>
 
 #define __shouldSetNeedsDisplay(layer) (flags.needsDisplay \
   || (flags.setOpaque && _flags.opaque != (layer).opaque)\
   || (flags.setBackgroundColor && !CGColorEqualToColor(backgroundColor, (layer).backgroundColor)))
+
+using namespace AS;
 
 typedef struct {
   // Properties
@@ -81,6 +85,7 @@ typedef struct {
   int setAccessibilityNavigationStyle:1;
   int setAccessibilityCustomActions:1;
   int setAccessibilityHeaderElements:1;
+  int setAccessibilityElements:1;
   int setAccessibilityActivationPoint:1;
   int setAccessibilityPath:1;
   int setSemanticContentAttribute:1;
@@ -88,7 +93,6 @@ typedef struct {
   int setPreservesSuperviewLayoutMargins:1;
   int setInsetsLayoutMarginsFromSafeArea:1;
   int setActions:1;
-  int setMaskedCorners : 1;
 } ASPendingStateFlags;
 
 
@@ -137,6 +141,7 @@ static constexpr ASPendingStateFlags kZeroFlags = {0};
   UIAccessibilityNavigationStyle accessibilityNavigationStyle;
   NSArray *accessibilityCustomActions;
   NSArray *accessibilityHeaderElements;
+  NSArray *accessibilityElements;
   CGPoint accessibilityActivationPoint;
   UIBezierPath *accessibilityPath;
   UISemanticContentAttribute semanticContentAttribute API_AVAILABLE(ios(9.0), tvos(9.0));
@@ -222,7 +227,6 @@ ASDISPLAYNODE_INLINE void ASPendingStateApplyMetricsToLayer(_ASPendingState *sta
 @synthesize preservesSuperviewLayoutMargins=preservesSuperviewLayoutMargins;
 @synthesize insetsLayoutMarginsFromSafeArea=insetsLayoutMarginsFromSafeArea;
 @synthesize actions=actions;
-@synthesize maskedCorners = maskedCorners;
 
 static CGColorRef blackColorRef = NULL;
 static UIColor *defaultTintColor = nil;
@@ -458,12 +462,6 @@ static UIColor *defaultTintColor = nil;
 {
   cornerRadius = newCornerRadius;
   _stateToApplyFlags.setCornerRadius = YES;
-}
-
-- (void)setMaskedCorners:(CACornerMask)newMaskedCorners
-{
-  maskedCorners = newMaskedCorners;
-  _stateToApplyFlags.setMaskedCorners = YES;
 }
 
 - (void)setContentMode:(UIViewContentMode)newContentMode
@@ -893,6 +891,13 @@ static UIColor *defaultTintColor = nil;
 }
 #pragma clang diagnostic pop
 
+- (void)setAccessibilityElements:(NSArray *)newAccessibilityElements {
+  _flags.isAccessibilityElement = YES;
+  if (accessibilityElements != newAccessibilityElements) {
+    accessibilityElements = [newAccessibilityElements copy];
+  }
+}
+
 - (CGPoint)accessibilityActivationPoint
 {
   if (_stateToApplyFlags.setAccessibilityActivationPoint) {
@@ -978,12 +983,6 @@ static UIColor *defaultTintColor = nil;
   if (flags.setCornerRadius)
     layer.cornerRadius = cornerRadius;
 
-  if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
-    if (flags.setMaskedCorners) {
-      layer.maskedCorners = maskedCorners;
-    }
-  }
-
   if (flags.setContentMode)
     layer.contentsGravity = ASDisplayNodeCAContentsGravityFromUIContentMode(contentMode);
 
@@ -1035,8 +1034,9 @@ static UIColor *defaultTintColor = nil;
     [layer layoutIfNeeded];
 }
 
-- (void)applyToView:(UIView *)view withSpecialPropertiesHandling:(BOOL)specialPropertiesHandling
-{
+- (void)applyToView:(UIView *)view
+    withSpecialPropertiesHandling:(BOOL)specialPropertiesHandling
+                             node:(ASDisplayNode *)node {
   /*
    Use our convenience setters blah here instead of layer.blah
    We were accidentally setting some properties on layer here, but view in UIViewBridgeOptimizations.
@@ -1244,7 +1244,16 @@ static UIColor *defaultTintColor = nil;
   if (flags.setAccessibilityHeaderElements)
     view.accessibilityHeaderElements = accessibilityHeaderElements;
 #endif
-  
+
+  if (flags.setAccessibilityElements) {
+    _ASDisplayView *displayView = ASDynamicCast(view, _ASDisplayView);
+    if (displayView) {
+      [displayView setAccessibilityElements:nil];
+    } else {
+      view.accessibilityElements = accessibilityElements;
+    }
+  }
+
   if (flags.setAccessibilityActivationPoint)
     view.accessibilityActivationPoint = accessibilityActivationPoint;
   
@@ -1257,16 +1266,26 @@ static UIColor *defaultTintColor = nil;
 //    // Checking if the transform is identity is expensive, so disable when unnecessary. We have assertions on in Release, so DEBUG is the only way I know of.
 //    ASDisplayNodeAssert(CATransform3DIsIdentity(layer.transform), @"-[ASDisplayNode setFrame:] - self.transform must be identity in order to set the frame property.  (From Apple's UIView documentation: If the transform property is not the identity transform, the value of this property is undefined and therefore should be ignored.)");
 //#endif
-    view.frame = frame;
+    view.bounds = CGRectMake(view.bounds.origin.x, view.bounds.origin.y, frame.size.width, frame.size.height);
+    view.center = CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame));
   } else {
     ASPendingStateApplyMetricsToLayer(self, layer);
   }
   
   if (flags.needsLayout)
     [view setNeedsLayout];
-  
-  if (flags.layoutIfNeeded)
-    [view layoutIfNeeded];
+
+  if (flags.layoutIfNeeded) {
+    // In Yoga2 we always forward to the layer. Ever since iOS SDK 6, UIView has
+    // different semantics for layoutIfNeeded, where it doesn't actually walk up.
+    // We always want to walk up. We don't have a node here, but since this behavior is more
+    // correct, we will unconditionally enable it if you're in the experiment.
+    if (AS::Yoga2::GetEnabled(node)) {
+      [layer layoutIfNeeded];
+    } else {
+      [view layoutIfNeeded];
+    }
+  }
 }
 
 // FIXME: Make this more efficient by tracking which properties are set rather than reading everything.

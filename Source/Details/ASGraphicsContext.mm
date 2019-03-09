@@ -33,7 +33,9 @@ UIImage *ASGraphicsCreateImageWithOptions(CGSize size, BOOL opaque, CGFloat scal
       static UIGraphicsImageRendererFormat *opaqueFormat;
       static dispatch_once_t onceToken;
       dispatch_once(&onceToken, ^{
-        if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
+        // Although +preferredFormat is documented available on iOS 11, it actually crashes with an
+        // unrecognized selector exception in iOS 11.0.0.
+        if (AS_AVAILABLE_IOS_TVOS(11.0.1, 11.0.1)) {
           defaultFormat = [UIGraphicsImageRendererFormat preferredFormat];
           opaqueFormat = [UIGraphicsImageRendererFormat preferredFormat];
         } else {
@@ -55,7 +57,8 @@ UIImage *ASGraphicsCreateImageWithOptions(CGSize size, BOOL opaque, CGFloat scal
       } else if (scale == 0 || scale == ASScreenScale()) {
         format = opaque ? opaqueFormat : defaultFormat;
       } else {
-        if (AS_AVAILABLE_IOS_TVOS(11, 11)) {
+        // See comment above about iOS 11.0.0.
+        if (AS_AVAILABLE_IOS_TVOS(11.0.1, 11.0.1)) {
           format = [UIGraphicsImageRendererFormat preferredFormat];
         } else {
           format = [UIGraphicsImageRendererFormat defaultFormat];
